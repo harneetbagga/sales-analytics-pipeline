@@ -1,0 +1,55 @@
+# ---- Secrets and credentials (never commit) ----
+.env
+.env.*
+*.pem
+*.key
+simple_auth_manager_passwords.json.generated
+# Local Airflow config holds a generated fernet key and secret key
+airflow.cfg
+config/airflow.cfg
+
+# ---- Local Airflow state ----
+airflow.db
+airflow.db-shm
+airflow.db-wal
+*.db
+logs/
+standalone_admin_password.txt
+
+# ---- Python / test caches ----
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# ---- Editor / OS ----
+.DS_Store
+.idea/
+.vscode/
+
+# ---- Scratch, backups and drafts ----
+.sql_backup_*/
+_to_delete/
+*.bak
+*.bkp
+.$*.bkp
+bronze_to_silver_backup.py
+test.excalidraw
+MORNING_CHECKLIST.md
+
+# ---- Personal interview prep (keep local; remove a line to publish it) ----
+docs/Interview Reading List - Sales Analytics.md
+docs/Sales_Analytics_Pipeline_STAR_Story.docx
+docs/Sales_Analytics_Pipeline_Story_DE_Version_v2.docx
+docs/SME_Questions_Updated_Answers.docx
+
+# ---- Original, unredacted screenshots (publish only docs/screenshots_public/) ----
+docs/screenshots/
+
+docs/Screenshots/
+
+# ---- Word lock files and personal story drafts ----
+docs/Sales_Analytics_Pipeline_*
+docs/~$*

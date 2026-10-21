@@ -1,0 +1,15 @@
+# Pin to the constraints file for whatever Airflow version you pick in
+# Phase 5. In the MWAA environment's "Airflow configuration options"
+# step, or at the top of this file as a comment, MWAA reads a
+# --constraint pointing at:
+#   https://raw.githubusercontent.com/apache/airflow/constraints-<AIRFLOW_VERSION>/constraints-3.12.txt
+# Without this, pip can silently install a package version that
+# conflicts with what MWAA's own base image ships, and the
+# environment fails to start with an opaque error. Confirm the exact
+# constraints URL on the "Specifying a requirements.txt file" page
+# for the Airflow version you actually select.
+
+apache-airflow-providers-snowflake
+apache-airflow-providers-postgres
+apache-airflow-providers-amazon
+pytest

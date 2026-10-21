@@ -1,0 +1,233 @@
+-- ============================================================
+-- FILE: gold_activity_outcome_reference.sql
+-- PURPOSE: Complete empirical mapping of all custom activity
+--          types, their outcome fields, and actual data values
+--          observed in Silver layer (as of 2026-06-22)
+-- SOURCE:  sales-analytical-silver-transformation-lead-activitiies-summary_2026-06-22-1027.csv
+-- ============================================================
+
+-- Distinct Custom Acitivies 
+-- Setter Hand Off Notes
+-- 7) New Sale
+-- Fathom Call
+-- 2) Prospecting Follow Up
+-- 13) New Deposit
+-- 11) Post-Sale Activity
+-- 12) Onboarding Complete
+-- Payment Transaction
+-- Refund Decision
+-- New Referral Generated
+-- 3) Triage Call
+-- Slack User Removal
+-- 14) Backend Sale
+-- 6) Strategy Call Follow Up
+-- 9) Additional Cash Collected
+-- 0) Pipeline Update
+-- 5) Strategy Call
+-- 10) Call Confirmation Activity
+-- Referral Ask
+-- 4) Triage Call Follow Up
+-- 15) Refund Request Initiated
+-- 1) Prospecting Activity
+-- Backend Sale Pitch
+
+-- ============================================================
+-- STAKEHOLDER CLARIFICATION (2026-06-22):
+-- The lead funnel is a TWO-STAGE process with DISTINCT metrics:
+--
+-- STAGE 1 — TRIAGE CALL (Inbound) / PROSPECTING ACTIVITY (Outbound)
+--   Inbound Booked  = Triage Call logged (any record exists)
+--   Inbound Taken   = Triage Call COMPLETED = outcome NOT IN:
+--                     ('6. No Show', '7. Reschedule', '8. Cancel')
+--
+--   Outbound Dials  = Prospecting Activity logged
+--   Outbound Set    = outcome = '2. Strategy Call Scheduled'
+--
+-- STAGE 2 — STRATEGY CALL
+--   Strategy Call Booked = Triage Outcome = '1. Strategy Call Scheduled'
+--                       OR Prospecting Outcome = '2. Strategy Call Scheduled'
+--   Strategy Call Taken  = Strategy Call attended = outcome NOT IN:
+--                     ('4. No Show', '3. Cancel- Not Interested',
+--                      '2. Admin Cancel', '7. Cancel- Nurture',
+--                      '8. Cancel- Nurture')
+-- ============================================================
+
+-- ============================================================
+-- 1) PROSPECTING ACTIVITY
+-- Fields: Avatar, Lead Quality, Prospecting Call Outcome
+-- ============================================================
+-- Prospecting Call Outcome values (cnt):
+--   3636  3. Follow Up
+--   1873  2. Strategy Call Scheduled   ← OUTBOUND SET
+--   1330  6. Not Interested
+--   1074  4. Unqualified
+--    173  1. Triage Booked
+--     98  5. Inaccurate Contact
+
+-- Lead Quality values:
+--   3118  3 - Good Fit, Not Ready Now
+--   1874  1 - Not Interested
+--   1467  5 - Good Fit, Ready Now, Financially Viable
+--   1121  4 - Good Fit, Ready Now, Financially Questionable
+--    599  2 - Bad fit due to Visa/Student/etc
+
+-- ============================================================
+-- 2) PROSPECTING FOLLOW UP
+-- Fields: Avatar, Follow Up Type, Prospecting Call Outcome
+-- ============================================================
+-- Prospecting Call Outcome values (cnt):
+--    707  3. Follow Up
+--    243  2. Strategy Call Scheduled   ← OUTBOUND SET
+--    136  6. Not Interested
+--     86  4. Unqualified
+--     28  1. Triage Booked
+--      5  5. Inaccurate Contact
+
+-- Follow Up Type values:
+--    997  Outbound
+--    208  Scheduled
+
+-- ============================================================
+-- 3) TRIAGE CALL
+-- Fields: Avatar, Lead Quality, Triage Call Outcome
+-- ============================================================
+-- Triage Call Outcome values (cnt):
+--   1015  6. No Show         ← EXCLUDED from Inbound Taken
+--    928  1. Strategy Call Scheduled  ← INBOUND TAKEN + STRATEGY CALL BOOKED
+--    275  2. Unqualified     ← INBOUND TAKEN (attended, not no-show)
+--    121  3. Follow Up < 10 Days  ← INBOUND TAKEN
+--     78  7. Reschedule      ← EXCLUDED from Inbound Taken
+--     64  8. Cancel          ← EXCLUDED from Inbound Taken
+--     63  10. Not Interested ← INBOUND TAKEN (attended, not no-show)
+--     30  5. Long Term Follow Up  ← INBOUND TAKEN
+--     29  4. Follow Up < 1 Month  ← INBOUND TAKEN
+--     10  9. Inaccurate Prospect  ← INBOUND TAKEN
+
+-- INBOUND TAKEN logic (per the business stakeholder):
+--   Triage call COMPLETED = outcome NOT IN (
+--     '6. No Show', '7. Reschedule', '8. Cancel'
+--   )
+-- Total Inbound Taken = 928+275+121+63+30+29+10 = 1,456
+
+-- STRATEGY CALL BOOKED = Triage outcome = '1. Strategy Call Scheduled' = 928
+
+-- ============================================================
+-- 4) TRIAGE CALL FOLLOW UP
+-- Fields: Avatar, Follow Up Type, Triage Call Outcome
+-- ============================================================
+-- Triage Call Outcome values (cnt) — low volume (13 records):
+--     8  1. Strategy Call Scheduled
+--     2  3. Follow Up < 10 Days
+--     2  6. No Show
+--     1  5. Long Term Follow Up
+
+-- ============================================================
+-- 5) STRATEGY CALL
+-- Fields: Avatar, Buyer Readiness Stage, Closer Qualified(Yes/No),
+--         Offer Presented, Pipeline Stage, Strategy Call Outcome, 
+--         Contract Value, Objections Faced, Program, Setter
+-- ============================================================
+-- Strategy Call Outcome values (cnt):
+--   1513  1. Follow Up            ← TAKEN (attended)
+--    994  4. No Show              ← NOT TAKEN (excluded)
+--    279  5. Reschedule           ← TAKEN (attended — call happened, rescheduled next)
+--    179  8. Cancel- Nurture      ← NOT TAKEN (excluded)
+--    170  3. Cancel- Not Interested ← NOT TAKEN (excluded)
+--    139  2. Admin Cancel         ← NOT TAKEN (excluded)
+--     91  6. Sale                 ← TAKEN + SALE
+--     88  7. Lost                 ← TAKEN (attended, did not buy)
+
+-- STRATEGY CALL TAKEN (per requirements + the business stakeholder):
+--   outcome NOT IN (
+--     '4. No Show',
+--     '3. Cancel- Not Interested',
+--     '2. Admin Cancel',
+--     '7. Cancel- Nurture',    ← NOTE: '7. Cancel- Nurture' listed in requirements doc
+--     '8. Cancel- Nurture'     ← but only '8. Cancel- Nurture' exists in actual data
+--   )
+-- NOTE: '3. No Show' listed in requirements doc but DOES NOT EXIST in actual data
+
+-- SALE indicators:
+--   '6. Sale' on Strategy Call Outcome
+--   OR downstream 7) New Sale / 8) New Sale [Custom Payment Plan] activity
+
+-- Offer Presented values:
+--   1952  No
+--   1501  Yes
+
+-- Buyer Readiness Stage values:
+--   1259  6 - No Show
+--    810  3- Looking/ Open
+--    548  4- Ready for Change
+--    434  5- Ready to Start
+--    218  2- Good Idea
+--    184  1- Not Interested
+
+-- Pipeline Stage values:
+--   1252  0. Strategy Call Scheduled
+--    829  2. Future Close < 10 Days
+--    539  1. Offer Not Presented
+--    411  3. Short Term Farm- 1 Month
+--    133  Lost
+--     82  4. Short Term Farm- 1-3 Months
+--     73  WON
+--     65  6. Long Term Farm
+--     39  5. Short Term Farm- 3-6 Months
+--     28  Deposit
+
+-- ============================================================
+-- 6) STRATEGY CALL FOLLOW UP
+-- Fields: Avatar, Buyer Readiness Stage, Closer Qualified,
+--         Follow Up Call Outcome, Follow Up Type, Offer Presented,
+--         Pipeline Stage
+-- ============================================================
+-- Follow Up Call Outcome values (cnt):
+--    352  1. Follow Up       ← TAKEN
+--     90  3. No Show         ← NOT TAKEN
+--     65  4. Reschedule      ← TAKEN
+--     43  5. Sale            ← TAKEN + SALE
+--     43  7. Cancel- Nurture ← NOT TAKEN
+--     21  2. Cancel- No Longer Interested ← NOT TAKEN
+--     17  6. Lost            ← TAKEN, no sale
+
+-- ============================================================
+-- 7) NEW SALE
+-- Fields: Payment Type, Sales Type, Cash Collected, Closer, Setter, 
+--         Add-Ons,Contract value, Payment Plan, Payment Type, Program
+-- ============================================================
+-- Sales Type values (describes WHERE the sale was closed):
+--    117  Follow Up       ← closed on a follow-up call
+--     87  Strategy Call   ← closed on the initial strategy call
+
+-- Payment Type values:
+--    124  Payment Plan
+--     65  Paid in Full
+--     15  Paid Deposit
+
+-- ============================================================
+-- CORRECTED METRIC LOGIC FOR INBOUND SETTER REPORT
+-- ============================================================
+-- inbound_booked       = COUNT of Triage Call activities
+-- inbound_taken        = COUNT where Triage Call Outcome NOT IN
+--                        ('6. No Show', '7. Reschedule', '8. Cancel')
+-- triage_set_rate      = inbound_taken / inbound_booked × 100
+-- strategy_call_booked = COUNT where Triage Call Outcome = '1. Strategy Call Scheduled'
+-- show_rate            = strategy_call_taken / strategy_call_booked × 100
+-- strategy_call_taken  = COUNT where Strategy Call Outcome NOT IN
+--                        ('4. No Show', '3. Cancel- Not Interested',
+--                         '2. Admin Cancel', '7. Cancel- Nurture', '8. Cancel- Nurture')
+-- offer_rate           = offers_presented / strategy_call_taken × 100
+-- total_sales          = COUNT where Strategy Outcome = '6. Sale'
+--                        OR New Sale activity exists
+-- sale_rate            = total_sales / strategy_call_taken × 100
+-- average_order_value  = AVG(contracted_value) where sale exists
+
+-- ============================================================
+-- KEY FINDING: INBOUND TAKEN vs STRATEGY CALL BOOKED are DIFFERENT
+-- ============================================================
+-- Old logic: inbound_taken = strategy_call_booked = 928
+--            (both were TRIAGE OUTCOME = '1. Strategy Call Scheduled')
+-- New logic (the business stakeholder):
+--   inbound_taken        = 1,456 (triage call completed — showed up)
+--   strategy_call_booked =   928 (triage resulted in SC being scheduled)
+-- These are now TWO DIFFERENT numbers measuring DIFFERENT things
