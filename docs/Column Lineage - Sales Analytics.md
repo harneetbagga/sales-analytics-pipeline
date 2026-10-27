@@ -34,10 +34,12 @@ Each S3 line has exactly three keys: `JSON_OBJECT`, `SOURCE_INSERT_DATE`, `PG_IN
 | SOURCE_INSERT_DATE | `$1:SOURCE_INSERT_DATE::VARCHAR` |
 | PG_INSERT_DATE | `$1:PG_INSERT_DATE::VARCHAR` |
 | LOAD_DATE | no source in the file: the `target_date` used for the run, cast to DATE (the same value as the `load_date=` folder) |
+| SOURCE_FILE_NAME | no source in the file: Snowflake's `METADATA$FILENAME`, the S3 file the row came from (path relative to the stage, e.g. `leads_raw/load_date=2026-10-20/leads_raw.json`) |
+| INGESTED_AT | no source in the file: the time the COPY ran, `CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ` (UTC) |
 
 `ON_ERROR = ABORT_STATEMENT`; `FORCE = TRUE` only when the run config has `force: true`.
 
-Bronze tables: `LEAD_ACTIVITES_RAW`, `CUSTOM_ACTIVITES_RAW`, `CLOSE_CRM_USERS_RAW`, `LEADS_RAW`. Each has `JSON_OBJECT`, `SOURCE_INSERT_DATE`, `PG_INSERT_DATE`, `LOAD_DATE`. Silver reads `JSON_OBJECT` and `LOAD_DATE` (it becomes INSERT_DATE in Silver).
+Bronze tables: `LEAD_ACTIVITES_RAW`, `CUSTOM_ACTIVITES_RAW`, `CLOSE_CRM_USERS_RAW`, `LEADS_RAW`. Each has `JSON_OBJECT`, `SOURCE_INSERT_DATE`, `PG_INSERT_DATE`, `LOAD_DATE`, `SOURCE_FILE_NAME`, `INGESTED_AT`. The last two are lineage columns (which file, loaded when); rows loaded before they were added hold NULL. Silver reads `JSON_OBJECT` and `LOAD_DATE` (it becomes INSERT_DATE in Silver).
 
 ## Silver run window and control table (Oct 2026, incremental Silver)
 Silver no longer re-reads all of Bronze each run. `bronze_to_silver` first plans a window per Bronze source, runs every Silver step inside it, and commits the window only after the last step succeeds. This is design logic (manual lineage).
@@ -295,8 +297,8 @@ Call-level and lead-level metrics are aggregated separately and joined once at (
 ## Data-quality tables (new)
 | Table | Written by | Content |
 |---|---|---|
-| `silver.dq_lap_staging_flat` | `validate_lap_staging` | the newest load's flattened activity rows (ACTIVITY_ID, LEAD_ID, TYPE, ACTIVITY_AT, INSERT_DATE, IS_GOOD, ROW_HASH, RAW_RECORD) from `lead_activities_processed_transient`; rebuilt every run |
-| `silver.dq_rejected_rows` | `validate_lap_staging` | each distinct rejected record once (by ROW_HASH) with reason, DAG run id and the raw record |
+| `silver.dq_lap_staging_flat` | `validate_lap_staging` | the flattened activity rows of every load in the run window (ACTIVITY_ID, LEAD_ID, TYPE, ACTIVITY_AT, INSERT_DATE, IS_GOOD, ROW_HASH, RAW_RECORD) from `lead_activities_processed_transient`; rebuilt every run |
+| `silver.dq_rejected_rows` | `validate_lap_staging` | each distinct rejected record once (by ROW_HASH) with reason, DAG run id and the raw record; RESOLVED_AT, RESOLUTION, RESOLVED_RUN_ID, RESOLUTION_NOTE are set by `replay_and_resolve_quarantine` (REPLAYED, SUPERSEDED) or by hand (ACCEPTED_LOSS) |
 | `silver.dq_run_log` | `validate_lap_staging` | one row per check per run (total, failed, failed %, threshold, decision) plus an overall row |
 
 ## Drift to verify (found while reading the code)

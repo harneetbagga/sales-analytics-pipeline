@@ -3,28 +3,36 @@ CREATE OR REPLACE TABLE sales_analytics.bronze.close_crm_users_raw (
     JSON_OBJECT        VARCHAR,
     SOURCE_INSERT_DATE VARCHAR,
     PG_INSERT_DATE     VARCHAR,
-    LOAD_DATE          DATE
+    LOAD_DATE          DATE,
+    SOURCE_FILE_NAME   VARCHAR,
+    INGESTED_AT        TIMESTAMP_NTZ
 );
 
 CREATE OR REPLACE TABLE sales_analytics.bronze.custom_activites_raw (
     JSON_OBJECT        VARCHAR,
     SOURCE_INSERT_DATE VARCHAR,
     PG_INSERT_DATE     VARCHAR,
-    LOAD_DATE          DATE
+    LOAD_DATE          DATE,
+    SOURCE_FILE_NAME   VARCHAR,
+    INGESTED_AT        TIMESTAMP_NTZ
 );
 
 CREATE OR REPLACE TABLE sales_analytics.bronze.leads_raw (
     JSON_OBJECT        VARCHAR,
     SOURCE_INSERT_DATE VARCHAR,
     PG_INSERT_DATE     VARCHAR,
-    LOAD_DATE          DATE
+    LOAD_DATE          DATE,
+    SOURCE_FILE_NAME   VARCHAR,
+    INGESTED_AT        TIMESTAMP_NTZ
 );
 
 CREATE OR REPLACE TABLE sales_analytics.bronze.lead_activites_raw (
     JSON_OBJECT        VARCHAR,
     SOURCE_INSERT_DATE VARCHAR,
     PG_INSERT_DATE     VARCHAR,
-    LOAD_DATE          DATE
+    LOAD_DATE          DATE,
+    SOURCE_FILE_NAME   VARCHAR,
+    INGESTED_AT        TIMESTAMP_NTZ
 );
 
 SELECT TABLE_NAME, COLUMN_NAME

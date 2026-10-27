@@ -1,0 +1,24 @@
+{
+  "Rules": [
+    {
+      "ID": "raw-to-glacier-instant-retrieval-after-90-days",
+      "Filter": { "Prefix": "raw/" },
+      "Status": "Enabled",
+      "Transitions": [
+        { "Days": 90, "StorageClass": "GLACIER_IR" }
+      ]
+    },
+    {
+      "ID": "abort-incomplete-multipart-uploads-after-7-days",
+      "Filter": { "Prefix": "" },
+      "Status": "Enabled",
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+    },
+    {
+      "ID": "expire-noncurrent-versions-after-30-days",
+      "Filter": { "Prefix": "" },
+      "Status": "Enabled",
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 30 }
+    }
+  ]
+}

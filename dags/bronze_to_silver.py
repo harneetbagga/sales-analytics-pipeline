@@ -70,6 +70,9 @@ CHANGE LOG (2026-10) -- INCREMENTAL SILVER:
   - Dedup tiebreak: the newest Bronze batch now wins a tie on activity_at
     (before, ties were arbitrary).
   - Dimension tables (users, custom_activities) stay full: they are tiny.
+  - Quarantine life cycle (quarantine.py): every quarantined row ends RESOLVED as
+    REPLAYED / SUPERSEDED / ACCEPTED_LOSS; trigger with reprocess_quarantine=true to
+    replay open rows after fixing the cause. See docs/QUARANTINE_RUNBOOK.md.
   See silver_incremental.py, tests/test_silver_incremental*.py and
   docs/INCREMENTAL_SILVER_RUNBOOK.md.
 """
@@ -89,7 +92,11 @@ except ImportError:                     # Airflow 2
     from airflow.models.param import Param
 
 from silver_incremental import (
-    DDL_WATERMARK, SOURCES, WATERMARK_TABLE, apply_tokens, compute_window)
+    DDL_WATERMARK, SOURCES, WATERMARK_TABLE, apply_tokens, compute_window,
+    transaction_batch)
+import alerts
+import quarantine as qr
+from alerts import notify_failure
 
 # ─────────────────────────────────────────────
 # SETTINGS
@@ -111,8 +118,8 @@ USE_CONTEXT = f"""
 # never reach the MERGE. If the share of rejected rows reaches the threshold
 # the run fails, Gold is not triggered, and an email goes out.
 DQ_FAIL_THRESHOLD_PCT = 10.0          # >= this % rejected -> stop the pipeline
-DQ_SMTP_CONN_ID      = "smtp_default"  # Airflow connection used to send email
-DQ_ALERT_VARIABLE    = "dq_alert_emails"  # Airflow Variable: comma-separated recipients
+# Alerting (SNS topic first, SMTP as the backup) lives in alerts.py, shared with the
+# failure callback of all five DAGs.
 DQ_GX_ROLE_DEFAULT   = "PIPELINE_TRANSFORMER"
 
 LAP_KNOWN_TYPES = ("Call", "SMS", "Email", "Note", "Meeting", "Created",
@@ -965,11 +972,12 @@ FROM sales_analytics.silver.lead_activities_processed_transient src,
 LATERAL FLATTEN(input => src.JSON_OBJECT:data) act
 """
 
-# ONE snapshot of the flattened rows of the NEWEST load only (older loads were
-# validated on earlier runs; the merge still drops any bad row via the filter).
-# ONE snapshot of the flattened staging rows. The row counts, the Great
-# Expectations checks and the quarantine all read this table, so they always
-# describe exactly the same rows (and the JSON is flattened only once).
+# ONE snapshot of the flattened staging rows of EVERY load in the run's window
+# (the daily file plus the look-back overlap, or all of Bronze on a full build).
+# The row counts, the Great Expectations checks and the quarantine all read this
+# table, so they always describe exactly the same rows (and the JSON is flattened
+# only once). It used to keep only the newest load, so in a multi-day run the bad
+# rows of older loads were dropped by the merge filter but never quarantined.
 SQL_LAP_STAGING_SNAPSHOT = USE_CONTEXT + f"""
 CREATE OR REPLACE TRANSIENT TABLE sales_analytics.silver.dq_lap_staging_flat AS
 SELECT act.value:id::VARCHAR                 AS ACTIVITY_ID,
@@ -980,11 +988,7 @@ SELECT act.value:id::VARCHAR                 AS ACTIVITY_ID,
        {LAP_GOOD_ROW_FILTER}                 AS IS_GOOD,
        MD5(TO_JSON(act.value))               AS ROW_HASH,
        act.value                             AS RAW_RECORD
-{_LAP_FLATTEN_FROM}
-WHERE src.INSERT_DATE = (
-    SELECT MAX(INSERT_DATE)
-    FROM sales_analytics.silver.lead_activities_processed_transient
-);
+{_LAP_FLATTEN_FROM};
 """
 
 SQL_LAP_STAGING_COUNTS = USE_CONTEXT + """
@@ -1011,12 +1015,7 @@ FROM (
     SELECT CURRENT_TIMESTAMP()                 AS REJECTED_AT,
            {_sql_str(run_id)}                  AS DAG_RUN_ID,
            'lead_activities_processed'         AS SOURCE_TABLE,
-           CASE
-               WHEN ACTIVITY_ID IS NULL THEN 'ACTIVITY_ID is null'
-               WHEN LEAD_ID IS NULL     THEN 'LEAD_ID is null'
-               WHEN ACTIVITY_AT IS NULL THEN 'ACTIVITY_AT is null'
-               ELSE 'TYPE not in known set'
-           END                                 AS REJECT_REASON,
+           {qr.REJECT_REASON_CASE}             AS REJECT_REASON,
            ACTIVITY_ID, LEAD_ID, TYPE, ROW_HASH, RAW_RECORD
     FROM sales_analytics.silver.dq_lap_staging_flat
     WHERE NOT IS_GOOD
@@ -1099,29 +1098,9 @@ def run_gx_lap_checks(hook):
     return checks
 
 
-def _alert_recipients():
-    try:
-        from airflow.sdk import Variable
-    except ImportError:  # older Airflow
-        from airflow.models import Variable
-    raw = Variable.get(DQ_ALERT_VARIABLE, default="")
-    return [e.strip() for e in str(raw).split(",") if e.strip()]
-
-
 def send_dq_email(subject, html_body):
-    """Never let an email problem change the pipeline outcome."""
-    try:
-        recipients = _alert_recipients()
-        if not recipients:
-            logging.warning("No recipients in Variable %s; email not sent: %s",
-                            DQ_ALERT_VARIABLE, subject)
-            return
-        from airflow.providers.smtp.hooks.smtp import SmtpHook
-        with SmtpHook(smtp_conn_id=DQ_SMTP_CONN_ID) as smtp:
-            smtp.send_email_smtp(to=recipients, subject=subject, html_content=html_body)
-        logging.info("DQ email sent to %s", recipients)
-    except Exception:
-        logging.exception("Could not send DQ email (pipeline outcome unchanged): %s", subject)
+    """SNS first, SMTP as the backup; never lets an alerting problem change the outcome (alerts.py)."""
+    alerts.send_alert(subject, html_body)
 
 
 def fmt_pct(pct):
@@ -1133,7 +1112,7 @@ def fmt_pct(pct):
     return f"{pct:.7f}".rstrip("0").rstrip(".") + "%"
 
 
-def build_dq_email(decision, run_id, total, rejected, pct, checks):
+def build_dq_email(decision, run_id, total, rejected, pct, checks, reasons=None):
     rows = "".join(
         f"<tr><td>{c['column']}</td><td>{c['check']}</td>"
         f"<td align='right'>{c['failed']:,}</td><td align='right'>{fmt_pct(c['pct'])}</td></tr>"
@@ -1152,11 +1131,16 @@ def build_dq_email(decision, run_id, total, rejected, pct, checks):
 <b>Rows checked:</b> {total:,}<br>
 <b>Rows rejected:</b> {rejected:,} ({fmt_pct(pct)})<br>
 <b>Good rows:</b> {total - rejected:,}</p>
+{qr.build_reason_table(reasons)}
+<p></p>
 <table border='1' cellpadding='4' cellspacing='0'>
 <tr><th>Column</th><th>Expectation</th><th>Failed rows</th><th>Failed %</th></tr>{rows}</table>
 <p>Rejected records: <code>SELECT * FROM sales_analytics.silver.dq_rejected_rows
 WHERE DAG_RUN_ID = '{run_id}'</code><br>
 History: <code>silver.dq_run_log</code></p>
+<p>Once the cause is fixed (for example a new activity type added to LAP_KNOWN_TYPES),
+replay the quarantined rows by triggering bronze_to_silver with
+<code>{{"reprocess_quarantine": true}}</code>. Steps: docs/QUARANTINE_RUNBOOK.md</p>
 """
 
 
@@ -1168,6 +1152,8 @@ def validate_lap_staging(**context):
     total, rejected = hook.get_first(SQL_LAP_STAGING_COUNTS)
     total, rejected = int(total or 0), int(rejected or 0)
     decision, pct = decide_dq_outcome(total, rejected)
+    reasons = ([(r[0], r[1]) for r in hook.get_records(USE_CONTEXT + qr.reject_breakdown_sql())]
+               if rejected else [])
 
     checks = run_gx_lap_checks(hook)
     gx_failed = sum(c["failed"] for c in checks)
@@ -1206,7 +1192,7 @@ VALUES
         return
     subject = (f"[Sales Analytics] Silver data quality {decision}: "
                f"{rejected:,} of {total:,} rows rejected ({fmt_pct(pct)})")
-    send_dq_email(subject, build_dq_email(decision, run_id, total, rejected, pct, checks))
+    send_dq_email(subject, build_dq_email(decision, run_id, total, rejected, pct, checks, reasons))
     if decision == "FAIL":
         raise AirflowFailException(
             f"Silver data quality FAILED: {rejected:,} of {total:,} staged rows "
@@ -1231,6 +1217,7 @@ def init_run(**context):
     params = context["params"]
     hook = _hook()
     hook.run(DDL_WATERMARK)
+    hook.run(USE_CONTEXT + ";\n".join(qr.DDL) + ";")   # RESOLVED_* columns on dq_rejected_rows
     for src in SOURCES:
         hook.run(
             f"MERGE INTO {WATERMARK_TABLE} t USING (SELECT %s AS S) s "
@@ -1279,6 +1266,63 @@ def commit_watermark(**context):
     logging.info("Watermark committed; next run reads from the latest committed load date.")
 
 
+def run_scd2_in_transaction(statements):
+    """
+    Run SCD2 statements (close-out, then insert) as ONE transaction. Before, they were two
+    tasks: a failure between them left rows closed out with no replacement current row
+    until a retry. Now both are applied or neither is, so a retry is always safe.
+    """
+    hook = _hook()
+    # Every hook.run() call opens its own session, so the USE statements must travel in the
+    # same call, before BEGIN (they are not part of the transaction).
+    use_statements = [u.strip() + ";" for u in USE_CONTEXT.split(";") if u.strip()]
+    hook.run(use_statements + transaction_batch(statements, USE_CONTEXT), autocommit=True)
+
+
+def merge_lap_scd2(**context):
+    run_scd2_in_transaction([SQL_LAP_CLOSE_OUT, SQL_LAP_INSERT_NEW])
+
+
+def replay_and_resolve_quarantine(**context):
+    """
+    Close the quarantine loop after the daily LAP merge and before LAS is built:
+      1. SUPERSEDED: open rows whose activity Silver already holds at the same or a
+         newer version are obsolete.
+      2. REPLAYED (only when reprocess_quarantine=true): re-run the open rows through
+         the CURRENT row filter and the same SCD2 statements as the daily load. Rows
+         that now pass are merged and resolved; rows that still fail stay open.
+         Replayed rows get a fresh EFFECTIVE_START_DATE, so LAS picks them up in this
+         same run.
+      3. Open rows older than quarantine.STALE_DAYS raise an email until resolved.
+    ACCEPTED_LOSS is set by hand (docs/QUARANTINE_RUNBOOK.md).
+    """
+    run_id = context.get("run_id", "manual")
+    hook = _hook()
+
+    hook.run(USE_CONTEXT + qr.supersede_sql(run_id))
+
+    if context["params"].get("reprocess_quarantine"):
+        open_before = hook.get_first(USE_CONTEXT + qr.open_count_sql())[0]
+        hook.run(USE_CONTEXT + qr.replay_prep_sql())
+        eligible = hook.get_first(USE_CONTEXT + qr.replay_count_sql())[0]
+        if eligible:
+            run_scd2_in_transaction([qr.to_replay_source(SQL_LAP_CLOSE_OUT),
+                                     qr.to_replay_source(SQL_LAP_INSERT_NEW)])
+            hook.run(USE_CONTEXT + qr.replay_resolve_sql(run_id, LAP_GOOD_ROW_FILTER))
+        open_after = hook.get_first(USE_CONTEXT + qr.open_count_sql())[0]
+        logging.info("Quarantine replay: %s open before, %s eligible, %s open after "
+                     "(rows still open fail the current row filter).",
+                     open_before, eligible, open_after)
+
+    stale = hook.get_records(USE_CONTEXT + qr.stale_sql())
+    if stale:
+        total = sum(int(r[1]) for r in stale)
+        logging.warning("Quarantine: %s row(s) open for more than %s days.", total, qr.STALE_DAYS)
+        send_dq_email(
+            f"[Sales Analytics] {total:,} quarantined rows open for more than {qr.STALE_DAYS} days",
+            qr.build_stale_email([(r[0], r[1], r[2]) for r in stale]))
+
+
 # ─────────────────────────────────────────────
 # DAG
 # ─────────────────────────────────────────────
@@ -1287,6 +1331,7 @@ default_args = {
     "retries":          3,
     "retry_delay":      timedelta(minutes=5),
     "email_on_failure": False,
+    "on_failure_callback": notify_failure,   # one email per task that fails after retries
 }
 
 with DAG(
@@ -1305,6 +1350,9 @@ with DAG(
             description="Re-read this many days before the last processed batch (safety overlap)."),
         "since_date": Param(None, type=["null", "string"],
             description="Optional YYYY-MM-DD: reprocess Bronze batches from this date."),
+        "reprocess_quarantine": Param(False, type="boolean",
+            description="Also replay open rows from silver.dq_rejected_rows through the current "
+                        "row filter (use after fixing the cause, e.g. a new activity type)."),
     },
 ) as dag:
 
@@ -1353,17 +1401,10 @@ with DAG(
         op_kwargs={"sql_name": "SQL_LAP_TRANSIENT", "source": "lead_activites_raw"},
     )
 
-    # ── LAP SCD2 merge — two sequential steps, same task ───────────────────
-    close_out_lap = SQLExecuteQueryOperator(
-        task_id="close_out_lead_activities_processed",
-        conn_id=SNOWFLAKE_CONN_ID,
-        sql=SQL_LAP_CLOSE_OUT,
-    )
-
-    insert_new_lap = SQLExecuteQueryOperator(
-        task_id="insert_new_lead_activities_processed",
-        conn_id=SNOWFLAKE_CONN_ID,
-        sql=SQL_LAP_INSERT_NEW,
+    # ── LAP SCD2 merge — close-out and insert in ONE transaction ───────────
+    merge_lap = PythonOperator(
+        task_id="merge_lead_activities_processed_scd2",
+        python_callable=merge_lap_scd2,
     )
 
     # ── LAS transient (needs users + custom + LAP's current state) ────────
@@ -1402,9 +1443,9 @@ with DAG(
     #                     |
     #            [load_lap_transient]
     #                     |
-    #            [close_out_lap] → [insert_new_lap]
+    #            [merge_lap] (SCD2 close-out + insert, one transaction)
     #                     |
-    #     (users, custom_activities, custom_all_leads, insert_new_lap)
+    #     (users, custom_activities, custom_all_leads, replay_quarantine)
     #                     |
     #            [load_las_transient]
     #                     |
@@ -1420,13 +1461,18 @@ with DAG(
         python_callable=validate_lap_staging,
     )
 
-    load_lap_transient >> validate_lap >> close_out_lap >> insert_new_lap
+    replay_quarantine = PythonOperator(
+        task_id="replay_and_resolve_quarantine",
+        python_callable=replay_and_resolve_quarantine,
+    )
+
+    load_lap_transient >> validate_lap >> merge_lap >> replay_quarantine
 
     [
         transform_users,
         transform_custom_activities,
         transform_custom_all_leads,
-        insert_new_lap,
+        replay_quarantine,
     ] >> load_las_transient
 
     silver_dq_check = PythonOperator(

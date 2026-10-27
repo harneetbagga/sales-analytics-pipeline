@@ -23,6 +23,7 @@ MODES
   SINCE        start at since_date (backfill / reprocess a date range).
   INCREMENTAL  start at LAST_LOAD_DATE - lookback_days.
 """
+import re
 from datetime import date, datetime, timedelta
 
 WATERMARK_TABLE = "sales_analytics.silver.etl_watermark"
@@ -102,3 +103,21 @@ def apply_tokens(sql, window, mode):
     """Replace the __WIN__ and __LAS_SCOPE__ placeholders in a SQL string."""
     return (sql.replace("__WIN__", window_predicate(window))
                .replace("__LAS_SCOPE__", las_scope_predicate(mode)))
+
+
+def transaction_batch(statements, use_context):
+    """
+    ["BEGIN", stmt, ..., "COMMIT"] for SnowflakeHook.run(batch, autocommit=True): the
+    statements succeed or fail together (an open transaction is rolled back when the
+    session closes after an error). The session prefix (USE WAREHOUSE/DATABASE/SCHEMA)
+    is stripped because it must be run before BEGIN, and every body must be exactly one
+    statement so a failure cannot leave a half-applied step behind.
+    """
+    body = []
+    for sql in statements:
+        stmt = sql.replace(use_context, "", 1).strip()
+        without_comments = re.sub(r"--[^\n]*", "", stmt).strip().rstrip(";")
+        if ";" in without_comments:
+            raise ValueError("transaction_batch needs exactly one statement per entry")
+        body.append(stmt)
+    return ["BEGIN", *body, "COMMIT"]

@@ -29,9 +29,9 @@
 --   Step 2 (INSERT NEW): insert a fresh current row for anything
 --     new, or anything Step 1 just closed out
 -- Run both statements in this file, in order, every time this
--- table is refreshed. In the DAG these are two separate tasks
--- (close_out_lead_activities_processed → insert_new_lead_activities_processed)
--- so a failure in either is independently visible/retryable.
+-- table is refreshed. In the DAG both run in ONE task and ONE transaction
+-- (merge_lead_activities_processed_scd2): they are applied together or not at all,
+-- so a failure can never leave rows closed out without a replacement current row.
 
 -- ROWS:    900,908 unique activities (as of Jun 2026)
 -- NOTES:

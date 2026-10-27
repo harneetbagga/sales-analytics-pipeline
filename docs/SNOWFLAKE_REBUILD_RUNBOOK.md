@@ -25,6 +25,11 @@ Snowflake and the things that point at it need to be redone.
    3. `snowflake/dq_tables.sql` (`silver.dq_rejected_rows`, `silver.dq_run_log`).
    4. `snowflake/reporting_setup.sql`, then `snowflake/serving_layer.sql` to verify.
    `silver.etl_watermark` is created by the DAG on its first run.
+   The Bronze tables now include `SOURCE_FILE_NAME` and `INGESTED_AT`. On an existing
+   account that predates them, run `snowflake/bronze_metadata_columns.sql` (safe to repeat)
+   **before** deploying the new `s3_to_snowflake_bronze.py`. The backfill in step 5 fills both
+   columns; for clean lineage on old rows, `TRUNCATE` the four Bronze tables and backfill again
+   (Silver does not need rebuilding).
 3. **Re-link S3.** A new account has a new storage-integration identity.
    Run `DESC INTEGRATION <name>;` and copy `STORAGE_AWS_IAM_USER_ARN` and
    `STORAGE_AWS_EXTERNAL_ID` into the trust policy of the IAM role the

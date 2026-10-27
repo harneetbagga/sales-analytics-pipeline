@@ -110,6 +110,7 @@ CHANGE LOG:
 from datetime import datetime, timedelta, timezone
 
 from airflow import DAG
+from alerts import notify_failure
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.hooks.base import BaseHook
 
@@ -887,6 +888,7 @@ default_args = {
     "retries":          3,
     "retry_delay":      timedelta(minutes=5),
     "email_on_failure": False,
+    "on_failure_callback": notify_failure,   # one email per task that fails after retries
 }
 
 with DAG(

@@ -109,6 +109,7 @@ import logging
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from alerts import notify_failure
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
@@ -451,6 +452,7 @@ default_args = {
     "retries":          3,
     "retry_delay":      timedelta(minutes=5),
     "email_on_failure": False,
+    "on_failure_callback": notify_failure,   # one email per task that fails after retries
 }
 
 with DAG(

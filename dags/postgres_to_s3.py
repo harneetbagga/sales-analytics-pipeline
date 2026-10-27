@@ -32,11 +32,13 @@ Schedule: Every day at 8:00 AM America/New_York
 
 import json
 import io
+import os
 import logging
 from datetime import timedelta
 
 import pendulum
 from airflow import DAG
+from alerts import notify_failure
 from airflow.operators.python import PythonOperator
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.providers.postgres.hooks.postgres import PostgresHook
@@ -152,7 +154,13 @@ def extract_incremental_table(table_name, s3_prefix, target_date, **context):
     buffer        = io.BytesIO()
 
     conn   = pg_hook.get_conn()
-    cursor = conn.cursor()
+    # Server-side (named) cursor: Postgres keeps the result set and hands over
+    # chunk_size rows per fetchmany(), so worker memory holds one chunk, not the whole
+    # day (rows are ~60 KB; the largest daily file was 1 GB). A plain conn.cursor()
+    # would download the entire result before the first fetchmany(). The read runs in
+    # one open transaction for the few minutes the extract takes.
+    cursor = conn.cursor(name=f"extract_{table_name}_{os.getpid()}")
+    cursor.itersize = chunk_size
 
     try:
         cursor.execute(sql, {"target_date": target_date})
@@ -190,7 +198,6 @@ def extract_incremental_table(table_name, s3_prefix, target_date, **context):
                 buffer = io.BytesIO()
 
         cursor.close()
-        conn.close()
 
         if buffer.tell() > 0:
             buffer.seek(0)
@@ -230,6 +237,11 @@ def extract_incremental_table(table_name, s3_prefix, target_date, **context):
             Bucket=STAGING_BUCKET, Key=s3_key, UploadId=upload_id
         )
         raise e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────
@@ -240,6 +252,7 @@ default_args = {
     "retries": 3,
     "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,
+    "on_failure_callback": notify_failure,   # one email per task that fails after retries
 }
 
 with DAG(

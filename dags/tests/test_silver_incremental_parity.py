@@ -55,7 +55,9 @@ def _connect():
 @pytest.mark.parametrize("label", list(CHECKS))
 def test_incremental_state_equals_full_rebuild(label):
     table, cols, where = CHECKS[label]
-    baseline = os.environ["SILVER_PARITY_BASELINE"]
+    baseline = os.environ.get("SILVER_PARITY_BASELINE")
+    if not baseline:
+        pytest.skip("manual parity check: set SILVER_PARITY_BASELINE (see the docstring at the top)")
     a = f"{DB}.{baseline}.{table}"     # state left by the incremental runs
     b = f"{DB}.silver.{table}"         # state after the full refresh
     conn = _connect()

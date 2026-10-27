@@ -27,6 +27,15 @@ BACKFILL SUPPORT (this version):
   Add {"force": true} to the conf to force-reload a partition even if
   Snowflake's load history already has it (sets FORCE=TRUE on the COPY).
 
+BRONZE LAYOUT (identical for all four tables; rows are kept exactly as received):
+  JSON_OBJECT         VARCHAR       raw payload as text (not VARIANT: the source JSON can be
+                                    malformed; Silver repairs and parses it)
+  SOURCE_INSERT_DATE  VARCHAR       upstream insert timestamp carried inside the payload (wrapper tables)
+  PG_INSERT_DATE      VARCHAR       when the upstream job inserted the row into PostgreSQL
+  LOAD_DATE           DATE          the S3 partition (target_date) this row was loaded from
+  SOURCE_FILE_NAME    VARCHAR       the staged file the row came from (METADATA$FILENAME)
+  INGESTED_AT         TIMESTAMP_NTZ when Snowflake loaded the row, in UTC
+
 Tables:
   - custom_activites_raw    → wrapper structure, load target_date's partition
   - close_crm_users_raw     → wrapper structure, load target_date's partition
@@ -39,6 +48,7 @@ import logging
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from alerts import notify_failure
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.operators.python import PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
@@ -78,14 +88,18 @@ def copy_into_sql(table_name, target_date, force):
             JSON_OBJECT,
             SOURCE_INSERT_DATE,
             PG_INSERT_DATE,
-            LOAD_DATE
+            LOAD_DATE,
+            SOURCE_FILE_NAME,
+            INGESTED_AT
         )
         FROM (
             SELECT
                 $1:JSON_OBJECT::VARCHAR,
                 $1:SOURCE_INSERT_DATE::VARCHAR,
                 $1:PG_INSERT_DATE::VARCHAR,
-                '{target_date}'::DATE
+                '{target_date}'::DATE,
+                METADATA$FILENAME,
+                CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ
             FROM @{STAGE}/{table_name}/load_date={target_date}/
         )
         FILE_FORMAT = (
@@ -113,6 +127,7 @@ default_args = {
     "retries":          3,
     "retry_delay":      timedelta(minutes=5),
     "email_on_failure": False,
+    "on_failure_callback": notify_failure,   # one email per task that fails after retries
 }
 
 with DAG(

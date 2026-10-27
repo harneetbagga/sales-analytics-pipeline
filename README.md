@@ -2,8 +2,6 @@
 
 An idempotent, incremental ELT pipeline that turns a sales team's messy CRM data into governed KPI reports. It takes nested, malformed JSON from a Close CRM feed in PostgreSQL, lands it in S3 and Snowflake, cleans it through a Bronze / Silver / Gold medallion design, and serves four reports (Inbound Setter, Outbound Setter, Closer, Objections Faced) to QuickSight. Orchestrated with Apache Airflow on Amazon MWAA (managed Airflow).
 
-Built as the capstone for the Data Engineer Academy program.
-
 ![Architecture](docs/architecture.png)
 
 ## The problem

@@ -13,3 +13,5 @@ apache-airflow-providers-snowflake
 apache-airflow-providers-postgres
 apache-airflow-providers-amazon
 pytest
+apache-airflow-providers-smtp
+apache-airflow-providers-amazon

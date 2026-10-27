@@ -75,28 +75,36 @@ CREATE TABLE IF NOT EXISTS bronze.leads_raw (
     JSON_OBJECT         VARCHAR,
     SOURCE_INSERT_DATE  VARCHAR,
     PG_INSERT_DATE      VARCHAR,
-    LOAD_DATE           DATE
+    LOAD_DATE           DATE,
+    SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
+    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
 );
 
 CREATE TABLE IF NOT EXISTS bronze.lead_activites_raw (
     JSON_OBJECT         VARCHAR,
     SOURCE_INSERT_DATE  VARCHAR,
     PG_INSERT_DATE      VARCHAR,
-    LOAD_DATE           DATE
+    LOAD_DATE           DATE,
+    SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
+    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
 );
 
 CREATE TABLE IF NOT EXISTS bronze.close_crm_users_raw (
     JSON_OBJECT         VARCHAR,
     SOURCE_INSERT_DATE  VARCHAR,
     PG_INSERT_DATE      VARCHAR,
-    LOAD_DATE           DATE
+    LOAD_DATE           DATE,
+    SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
+    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
 );
 
 CREATE TABLE IF NOT EXISTS bronze.custom_activites_raw (
     JSON_OBJECT         VARCHAR,
     SOURCE_INSERT_DATE  VARCHAR,
     PG_INSERT_DATE      VARCHAR,
-    LOAD_DATE           DATE
+    LOAD_DATE           DATE,
+    SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
+    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
 );
 
 -- ============================================================

@@ -1,6 +1,16 @@
 import os
-import boto3
 import time
+
+import pytest
+
+# This file is a LIVE check, not a unit test: importing it starts a real QuickSight SPICE
+# refresh. The datasets use Direct Query now, so it is manual-only. To run it:
+#   RUN_QUICKSIGHT_REFRESH_TEST=1 QUICKSIGHT_ACCOUNT_ID=<aws account id> pytest dags/tests/test_ingestion.py -s
+if not (os.environ.get("RUN_QUICKSIGHT_REFRESH_TEST") and os.environ.get("QUICKSIGHT_ACCOUNT_ID")):
+    pytest.skip("manual QuickSight refresh check (see the comment at the top of this file)",
+                allow_module_level=True)
+
+import boto3  # noqa: E402  (after the skip, so collecting this file needs no AWS libraries)
 
 QUICKSIGHT_ACCOUNT_ID = os.environ["QUICKSIGHT_ACCOUNT_ID"]  # your AWS account id
 QUICKSIGHT_REGION = "us-east-1"
