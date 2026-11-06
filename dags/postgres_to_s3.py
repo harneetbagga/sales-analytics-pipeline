@@ -280,7 +280,7 @@ with DAG(
             "SELECT 1 FROM raw.lead_activites_raw "
             f"WHERE INSERT_DATE::date = '{TARGET_DATE_TEMPLATE}' LIMIT 1"
         ),
-        poke_interval=300,
+        poke_interval=900,  # 15 min: 8 pokes inside the 2 h window (SME review, 29 Oct)
         timeout=SOURCE_SLA_BUFFER_SECONDS,
         mode="reschedule",
         retries=0,
@@ -332,7 +332,7 @@ with DAG(
         trigger_dag_id="s3_to_snowflake_bronze",
         wait_for_completion=False,
         logical_date="{{ logical_date }}",
-        conf={"target_date": TARGET_DATE_TEMPLATE},  # propagate to downstream Bronze load
+        conf={"target_date": TARGET_DATE_TEMPLATE, "pipeline_run_id": "{{ run_id }}"},  # propagate to downstream Bronze load
     )
 
     # ── Dependencies — all 4 run in parallel after sensor passes ────────────

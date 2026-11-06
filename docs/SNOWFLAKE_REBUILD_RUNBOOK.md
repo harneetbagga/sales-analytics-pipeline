@@ -24,20 +24,30 @@ Snowflake and the things that point at it need to be redone.
    2. `snowflake/rbac_rules.sql` (roles, `reporting_wh`, grants).
    3. `snowflake/dq_tables.sql` (`silver.dq_rejected_rows`, `silver.dq_run_log`).
    4. `snowflake/reporting_setup.sql`, then `snowflake/serving_layer.sql` to verify.
+   5. `snowflake/service_users_and_role_hierarchy.sql` (as ACCOUNTADMIN): role hierarchy,
+      the `analyst_role`, ownership transfer to the transformer, and the `airflow_svc_user`
+      service user with its RSA public key. Generate the key pair first; see
+      `docs/SERVICE_USERS_RUNBOOK.md`. Check queries at the end of the script must show the
+      loader failing on Silver and on CREATE TABLE in Gold.
+   6. `snowflake/pii_masking_policies.sql` (dynamic masking on the Silver contact columns).
+      Needs Enterprise edition; on Standard, skip it.
    `silver.etl_watermark` is created by the DAG on its first run.
-   The Bronze tables now include `SOURCE_FILE_NAME` and `INGESTED_AT`. On an existing
+   The Bronze tables now include `SOURCE_FILE_NAME`, `INGESTED_AT` and `PIPELINE_RUN_ID`. On an existing
    account that predates them, run `snowflake/bronze_metadata_columns.sql` (safe to repeat)
    **before** deploying the new `s3_to_snowflake_bronze.py`. The backfill in step 5 fills both
-   columns; for clean lineage on old rows, `TRUNCATE` the four Bronze tables and backfill again
-   (Silver does not need rebuilding).
+   columns (not `PIPELINE_RUN_ID`, which is stamped by the load); for clean lineage on old rows, `TRUNCATE` the four Bronze tables and backfill again
+   (Silver does not need rebuilding). Run it as the owner of the Bronze tables; the loader role no longer owns them.
+   The Silver `PIPELINE_RUN_ID` column is added by `init_run` on the first `bronze_to_silver` run
+   (`snowflake/pipeline_run_id_columns.sql` is the same change for a manual run).
 3. **Re-link S3.** A new account has a new storage-integration identity.
    Run `DESC INTEGRATION <name>;` and copy `STORAGE_AWS_IAM_USER_ARN` and
    `STORAGE_AWS_EXTERNAL_ID` into the trust policy of the IAM role the
    integration uses. Check with `LIST @sales_analytics.bronze.s3_raw_stage;`.
 4. **Re-point the consumers.** Update the `snowflake_default` Airflow
-   connection (account, user, role, warehouse) in MWAA and in local Airflow,
-   and the QuickSight data source; then re-link the four datasets. If MWAA reads
-   connections from Secrets Manager, update the secret.
+   connection in MWAA and in local Airflow: the user is `airflow_svc_user` and the private
+   key goes in the secret (see `docs/SERVICE_USERS_RUNBOOK.md` for the JSON). Then update the
+   QuickSight data source, which uses its own key-pair service user, and re-link the four
+   datasets. If MWAA reads connections from Secrets Manager, update the secret.
 5. **Backfill Bronze** from S3 without triggering Silver:
    ```
    python scripts/backfill_bronze.py --dry-run            # see the plan

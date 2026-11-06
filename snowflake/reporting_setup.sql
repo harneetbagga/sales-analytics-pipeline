@@ -21,10 +21,12 @@ GRANT SELECT ON FUTURE TABLES IN SCHEMA sales_analytics.gold TO ROLE report_read
 GRANT CREATE TABLE ON SCHEMA sales_analytics.gold TO ROLE pipeline_transformer;
 -- (it owns the tables it creates, so it can GRANT SELECT on them)
 
--- 4. Dedicated QuickSight service user (password or, better, key-pair)
+-- 4. Dedicated QuickSight service user: key pair only (see docs/SERVICE_USERS_RUNBOOK.md
+--    for generating the pair). TYPE = SERVICE has no password and no interactive login.
 CREATE USER IF NOT EXISTS quicksight_svc
+  TYPE = SERVICE
   DEFAULT_ROLE = report_reader DEFAULT_WAREHOUSE = reporting_wh
-  PASSWORD = '<set-a-strong-password>' MUST_CHANGE_PASSWORD = FALSE;
+  RSA_PUBLIC_KEY = '<paste public key body, no BEGIN/END lines>';
 GRANT ROLE report_reader TO USER quicksight_svc;
 
 -- 5. Checks

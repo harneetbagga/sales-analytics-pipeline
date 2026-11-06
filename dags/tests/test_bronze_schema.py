@@ -15,7 +15,7 @@ ROOT = os.path.join(HERE, "..", "..")
 sys.path.insert(0, DAGS)
 
 BRONZE_TABLES = ("LEAD_ACTIVITES_RAW", "CUSTOM_ACTIVITES_RAW", "CLOSE_CRM_USERS_RAW", "LEADS_RAW")
-NEW_COLUMNS = ("SOURCE_FILE_NAME", "INGESTED_AT")
+NEW_COLUMNS = ("SOURCE_FILE_NAME", "INGESTED_AT", "PIPELINE_RUN_ID")
 
 
 def _stub(name, **attrs):
@@ -80,7 +80,7 @@ def test_copy_lists_and_selects_the_same_number_of_columns():
     columns = [c.strip() for c in cols.split(",") if c.strip()]
     selects = _split_top_level(sel)
     assert columns == ["JSON_OBJECT", "SOURCE_INSERT_DATE", "PG_INSERT_DATE", "LOAD_DATE",
-                       "SOURCE_FILE_NAME", "INGESTED_AT"]
+                       "SOURCE_FILE_NAME", "INGESTED_AT", "PIPELINE_RUN_ID"]
     assert len(columns) == len(selects)
 
 

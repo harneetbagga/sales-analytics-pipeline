@@ -35,6 +35,8 @@ BRONZE LAYOUT (identical for all four tables; rows are kept exactly as received)
   LOAD_DATE           DATE          the S3 partition (target_date) this row was loaded from
   SOURCE_FILE_NAME    VARCHAR       the staged file the row came from (METADATA$FILENAME)
   INGESTED_AT         TIMESTAMP_NTZ when Snowflake loaded the row, in UTC
+  PIPELINE_RUN_ID     VARCHAR       the Airflow run that started this pipeline run (postgres_to_s3);
+                                    carried unchanged through Silver and Gold
 
 Tables:
   - custom_activites_raw    → wrapper structure, load target_date's partition
@@ -49,6 +51,7 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from alerts import notify_failure
+from snowflake_auth import LOADER_ROLE
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.operators.python import PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
@@ -77,8 +80,9 @@ FORCE_RELOAD_TEMPLATE = "{{ dag_run.conf.get('force', false) }}"
 # ─────────────────────────────────────────────
 # COPY INTO SQL — one per table, scoped to target_date's partition
 # ─────────────────────────────────────────────
-def copy_into_sql(table_name, target_date, force):
+def copy_into_sql(table_name, target_date, force, pipeline_run_id="manual"):
     force_clause = "FORCE = TRUE" if str(force).lower() == "true" else ""
+    run_id = str(pipeline_run_id).replace("'", "")
     return f"""
         USE WAREHOUSE {WAREHOUSE};
         USE DATABASE {DATABASE};
@@ -90,7 +94,8 @@ def copy_into_sql(table_name, target_date, force):
             PG_INSERT_DATE,
             LOAD_DATE,
             SOURCE_FILE_NAME,
-            INGESTED_AT
+            INGESTED_AT,
+            PIPELINE_RUN_ID
         )
         FROM (
             SELECT
@@ -99,7 +104,8 @@ def copy_into_sql(table_name, target_date, force):
                 $1:PG_INSERT_DATE::VARCHAR,
                 '{target_date}'::DATE,
                 METADATA$FILENAME,
-                CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ
+                CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ,
+                '{run_id}'
             FROM @{STAGE}/{table_name}/load_date={target_date}/
         )
         FILE_FORMAT = (
@@ -112,8 +118,12 @@ def copy_into_sql(table_name, target_date, force):
 
 
 def run_copy_into(table_name, target_date, force, **context):
-    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID)
-    sql = copy_into_sql(table_name, target_date, force)
+    # Bronze load runs as the loader role: it can write Bronze and nothing else.
+    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID, role=LOADER_ROLE)
+    dag_run = context.get("dag_run")
+    conf = (getattr(dag_run, "conf", None) or {}) if dag_run else {}
+    run_id = conf.get("pipeline_run_id") or context.get("run_id") or "manual"
+    sql = copy_into_sql(table_name, target_date, force, run_id)
     logging.info(f"Loading {table_name} | target_date={target_date} | force={force}")
     logging.info(f"Running: {sql}")
     hook.run(sql)
@@ -190,6 +200,7 @@ with DAG(
     trigger_silver = TriggerDagRunOperator(
         task_id="trigger_bronze_to_silver",
         trigger_dag_id="bronze_to_silver",
+        conf={"pipeline_run_id": "{{ (dag_run.conf or {}).get('pipeline_run_id') or run_id }}"},
         wait_for_completion=False,
     )
 

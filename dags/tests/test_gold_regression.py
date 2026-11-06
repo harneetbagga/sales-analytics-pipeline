@@ -40,14 +40,21 @@ import snowflake.connector
 
 @pytest.fixture(scope="module")
 def sf_conn():
-    conn = snowflake.connector.connect(
+    kwargs = dict(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
-        password=os.environ["SNOWFLAKE_PASSWORD"],
         warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE", "sales_wh"),
         database=os.environ.get("SNOWFLAKE_DATABASE", "sales_analytics"),
         role=os.environ.get("SNOWFLAKE_ROLE"),
     )
+    # Service user: key pair. Otherwise password (local runs).
+    if os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE"):
+        kwargs["private_key_file"] = os.environ["SNOWFLAKE_PRIVATE_KEY_FILE"]
+        if os.environ.get("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"):
+            kwargs["private_key_file_pwd"] = os.environ["SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"]
+    else:
+        kwargs["password"] = os.environ["SNOWFLAKE_PASSWORD"]
+    conn = snowflake.connector.connect(**kwargs)
     yield conn
     conn.close()
 

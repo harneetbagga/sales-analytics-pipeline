@@ -53,3 +53,9 @@ docs/Screenshots/
 # ---- Word lock files and personal story drafts ----
 docs/Sales_Analytics_Pipeline_*
 docs/~$*
+
+# Private/public keys for service users: never commit
+*.p8
+*.pub
+docs/backup/
+docs/SME_Questions_Updated_Answers_v*.docx

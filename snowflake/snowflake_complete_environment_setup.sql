@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS bronze.leads_raw (
     PG_INSERT_DATE      VARCHAR,
     LOAD_DATE           DATE,
     SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
-    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
+    INGESTED_AT         TIMESTAMP_NTZ,   -- when Snowflake loaded the row, UTC
+    PIPELINE_RUN_ID     VARCHAR          -- pipeline run that loaded the row
 );
 
 CREATE TABLE IF NOT EXISTS bronze.lead_activites_raw (
@@ -86,7 +87,8 @@ CREATE TABLE IF NOT EXISTS bronze.lead_activites_raw (
     PG_INSERT_DATE      VARCHAR,
     LOAD_DATE           DATE,
     SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
-    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
+    INGESTED_AT         TIMESTAMP_NTZ,   -- when Snowflake loaded the row, UTC
+    PIPELINE_RUN_ID     VARCHAR          -- pipeline run that loaded the row
 );
 
 CREATE TABLE IF NOT EXISTS bronze.close_crm_users_raw (
@@ -95,7 +97,8 @@ CREATE TABLE IF NOT EXISTS bronze.close_crm_users_raw (
     PG_INSERT_DATE      VARCHAR,
     LOAD_DATE           DATE,
     SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
-    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
+    INGESTED_AT         TIMESTAMP_NTZ,   -- when Snowflake loaded the row, UTC
+    PIPELINE_RUN_ID     VARCHAR          -- pipeline run that loaded the row
 );
 
 CREATE TABLE IF NOT EXISTS bronze.custom_activites_raw (
@@ -104,7 +107,8 @@ CREATE TABLE IF NOT EXISTS bronze.custom_activites_raw (
     PG_INSERT_DATE      VARCHAR,
     LOAD_DATE           DATE,
     SOURCE_FILE_NAME    VARCHAR,         -- staged file the row came from (METADATA$FILENAME)
-    INGESTED_AT         TIMESTAMP_NTZ    -- when Snowflake loaded the row, UTC
+    INGESTED_AT         TIMESTAMP_NTZ,   -- when Snowflake loaded the row, UTC
+    PIPELINE_RUN_ID     VARCHAR          -- pipeline run that loaded the row
 );
 
 -- ============================================================

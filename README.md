@@ -7,7 +7,7 @@ An idempotent, incremental ELT pipeline that turns a sales team's messy CRM data
 ## The problem
 
 - CRM activity arrives as deeply nested, single-quote-escaped JSON. Outcomes are stored as opaque internal IDs, not names.
-- Every daily extract restates the full history, so naive appends multiply every count by the number of days loaded.
+- The upstream load is a cumulative snapshot with no change data capture: every daily extract restates the full history of each changed lead (about 100,000 activity records in roughly 1 GB, of which about 95% are repeats), so naive appends multiply every count by the number of days loaded.
 - Analysts cleaned the data by hand before every report, and leadership had almost no visibility into setter and closer performance, conversion or why deals were lost.
 
 About 2 million unique activities (about 2.2 million rows including history); roughly 1,300 activity IDs belong to more than one lead, so the obvious key (`ACTIVITY_ID`) is not unique.
@@ -24,10 +24,10 @@ Five decoupled DAGs, each triggering the next and each re-runnable on its own:
 | DAG | Job |
 |---|---|
 | `postgres_to_s3` | Daily incremental extract by `INSERT_DATE` (08:00 schedule), streamed to S3 as multipart upload. Backfill any day with `{"target_date": "YYYY-MM-DD"}`. |
-| `s3_to_snowflake_bronze` | `COPY INTO` Bronze exactly as received, scoped to one dated folder. |
+| `s3_to_snowflake_bronze` | `COPY INTO` Bronze exactly as received, scoped to one dated folder, as the loader role. Stamps file name, ingest time and the pipeline run ID. |
 | `bronze_to_silver` | JSON repair, flatten, ID-to-name resolution, Great Expectations gate, MD5-hash MERGE, SCD2 on the activity log. Incremental (see below). |
 | `silver_to_gold` | Rebuilds the five business views that define the funnel (booked, taken, offer, sale) once, for every report. |
-| `gold_to_export` | Builds four persistent `gold.rpt_*` report tables with a row-count gate and an atomic publish. |
+| `gold_to_export` | Builds four persistent `gold.rpt_*` report tables with a row-count gate and an atomic publish, then starts a full QuickSight SPICE refresh and polls until each dataset reports COMPLETED. |
 
 ## Design decisions
 
@@ -38,7 +38,9 @@ Five decoupled DAGs, each triggering the next and each re-runnable on its own:
 - **Quality gate before the write.** A Great Expectations suite validates each load, quarantines bad rows with the reason, logs pass/reject counts, warns by email, and stops the run if 10% or more fail.
 - **Gold is the single source of truth.** Reports read persistent `gold.rpt_*` tables, published with `INSERT OVERWRITE` so grants survive and a failed build never replaces good data.
 - **Serving isolation.** Dashboards use a dedicated X-Small, auto-suspend warehouse (`reporting_wh`) under a read-only role (`report_reader`), separate from the warehouse that loads and transforms.
-- **Governance.** Least-privilege IAM; three Snowflake roles (loader, transformer, reader); column lineage from the raw JSON key to the report column ([docs](docs/Column%20Lineage%20-%20Sales%20Analytics.md)); Airflow run history and Snowflake access history for audit.
+- **Access control.** Least-privilege IAM; a Snowflake role hierarchy (loader, transformer inheriting the loader, read-only report reader; sysadmin and an analyst role inherit them); Airflow and QuickSight connect as service users with RSA key pairs, never a personal login ([runbook](docs/SERVICE_USERS_RUNBOOK.md)).
+- **Lead contact data.** Dynamic masking policies hide email, attendee and message-body columns in Silver from every role except the pipeline roles (needs Snowflake Enterprise); Gold carries no lead contact fields.
+- **Lineage and audit.** A pipeline run ID is created by `postgres_to_s3`, passed in each trigger, written on Bronze and Silver rows and exposed on the Gold views; column lineage from the raw JSON key to the report column ([docs](docs/Column%20Lineage%20-%20Sales%20Analytics.md)); Airflow run history and Snowflake access history for audit.
 
 ### Incremental Silver
 
@@ -58,6 +60,10 @@ In my runs, a full refresh took about 12 minutes and an incremental run over two
 | `dags/tests/test_silver_incremental.py` | Window logic, every Bronze read is windowed, dedup rule | No |
 | `dags/tests/test_silver_incremental_parity.py` | Incremental result equals a full rebuild | Yes, plus `SILVER_PARITY_BASELINE` |
 | `dags/tests/test_gold_pivot_isolation.py` | No pivot can mix two leads that share an activity ID (source check and live check) | Live part only |
+| `dags/tests/test_spice_refresh.py` | SPICE polling: completed, in progress, failed and cancelled states | No |
+| `dags/tests/test_roles_and_auth.py` | Each DAG uses the intended role; key-pair connection with password fallback | No |
+| `dags/tests/test_masking_policies.py` | Masking policy attachments match the DDL; Gold and reports never read a masked column | No |
+| `dags/tests/test_pipeline_run_id.py` | Run ID written by every layer and passed through every trigger | No |
 | `dags/tests/test_gold_regression.py` | Known-answer regression suite for the Gold layer, run as a gate in `gold_to_export` | Yes |
 
 ```bash

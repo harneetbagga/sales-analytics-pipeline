@@ -58,16 +58,22 @@ def test_no_pivot_partitions_by_activity_id_alone():
 
 def _connect():
     snowflake = pytest.importorskip("snowflake.connector")
-    needed = ["SNOWFLAKE_ACCOUNT", "SNOWFLAKE_USER", "SNOWFLAKE_PASSWORD"]
+    has_key = bool(os.environ.get("SNOWFLAKE_PRIVATE_KEY_FILE"))
+    needed = ["SNOWFLAKE_ACCOUNT", "SNOWFLAKE_USER"] + ([] if has_key else ["SNOWFLAKE_PASSWORD"])
     if not all(os.environ.get(k) for k in needed):
         pytest.skip("Snowflake credentials not set")
     kwargs = dict(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
-        password=os.environ["SNOWFLAKE_PASSWORD"],
         warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE") or "sales_wh",
         database=os.environ.get("SNOWFLAKE_DATABASE") or "sales_analytics",
     )
+    if has_key:
+        kwargs["private_key_file"] = os.environ["SNOWFLAKE_PRIVATE_KEY_FILE"]
+        if os.environ.get("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"):
+            kwargs["private_key_file_pwd"] = os.environ["SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"]
+    else:
+        kwargs["password"] = os.environ["SNOWFLAKE_PASSWORD"]
     if os.environ.get("SNOWFLAKE_ROLE"):
         kwargs["role"] = os.environ["SNOWFLAKE_ROLE"]
     return snowflake.connect(**kwargs)

@@ -110,6 +110,7 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from alerts import notify_failure
+from snowflake_auth import TRANSFORMER_ROLE
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
@@ -140,6 +141,8 @@ WITH activity_pivot AS (
         las.LEAD_ID,
         las.ACTIVITY_ID,
         CONVERT_TIMEZONE('UTC', 'America/New_York', las.ACTIVITY_AT) AS ACTIVITY_AT,
+        MAX(las.PIPELINE_RUN_ID)
+            OVER (PARTITION BY las.ACTIVITY_ID, las.LEAD_ID)   AS PIPELINE_RUN_ID,
         las.CUSTOM_ACTIVITY                   AS ACTIVITY_TYPE,
         las.DEA_INTERNAL_NAME                 AS ASSIGNED_USER,
         las.DEA_INTERNAL_EMAIL                AS ASSIGNED_EMAIL,
@@ -163,7 +166,8 @@ triage AS (
         ASSIGNED_USER                                        AS SETTER_CLOSER_NAME,
         ASSIGNED_EMAIL                                       AS SETTER_CLOSER_EMAIL,
         TRIAGE_OUTCOME                                        AS TRIAGE_CALL_OUTCOME,
-        TRIAGE_OUTCOME = '1. Strategy Call Scheduled'        AS STRATEGY_CALL_BOOKED
+        TRIAGE_OUTCOME = '1. Strategy Call Scheduled'        AS STRATEGY_CALL_BOOKED,
+        PIPELINE_RUN_ID
     FROM flat
     WHERE ACTIVITY_TYPE = '3) Triage Call'
 ),
@@ -192,6 +196,7 @@ SELECT
     t.TRIAGE_CALL_OUTCOME,
     t.TRIAGE_CALL_DATE,
     t.STRATEGY_CALL_BOOKED,
+    t.PIPELINE_RUN_ID,
     TO_CHAR(
         COALESCE(s.DATE_OF_STRATEGY_CALL, s.STRATEGY_AT, t.TRIAGE_CALL_DATE),
         'YYYY'
@@ -217,6 +222,8 @@ WITH activity_pivot AS (
         las.LEAD_ID,
         las.ACTIVITY_ID,
         CONVERT_TIMEZONE('UTC', 'America/New_York', las.ACTIVITY_AT) AS ACTIVITY_AT,
+        MAX(las.PIPELINE_RUN_ID)
+            OVER (PARTITION BY las.ACTIVITY_ID, las.LEAD_ID)   AS PIPELINE_RUN_ID,
         las.CUSTOM_ACTIVITY                   AS ACTIVITY_TYPE,
         las.DEA_INTERNAL_NAME                 AS ASSIGNED_USER,
         las.DEA_INTERNAL_EMAIL                AS ASSIGNED_EMAIL,
@@ -242,6 +249,7 @@ prospecting AS (
             ASSIGNED_USER                                        AS SETTER_CLOSER_NAME,
             ASSIGNED_EMAIL                                       AS SETTER_CLOSER_EMAIL,
             PROSPECTING_OUTCOME = '2. Strategy Call Scheduled'   AS STRATEGY_CALL_BOOKED,
+            PIPELINE_RUN_ID,
             ROW_NUMBER() OVER (
                 PARTITION BY LEAD_ID
                 ORDER BY ACTIVITY_AT DESC
@@ -275,6 +283,7 @@ SELECT
     p.SETTER_CLOSER_NAME,
     p.PROSPECT_CALL_DATE,
     p.STRATEGY_CALL_BOOKED,
+    p.PIPELINE_RUN_ID,
     TO_CHAR(
         COALESCE(s.DATE_OF_STRATEGY_CALL, s.STRATEGY_AT, p.PROSPECT_CALL_DATE),
         'YYYY'
@@ -300,6 +309,8 @@ WITH activity_pivot AS (
         las.LEAD_ID,
         las.ACTIVITY_ID,
         CONVERT_TIMEZONE('UTC', 'America/New_York', las.ACTIVITY_AT) AS ACTIVITY_AT,
+        MAX(las.PIPELINE_RUN_ID)
+            OVER (PARTITION BY las.ACTIVITY_ID, las.LEAD_ID)   AS PIPELINE_RUN_ID,
         las.CUSTOM_ACTIVITY                   AS ACTIVITY_TYPE,
         las.MEETING_STATUS                    AS STATUS,
         MAX(CASE WHEN las.CUSTOM_ACTIVITY_OUTCOME_NAME = 'Strategy Call Outcome'
@@ -341,7 +352,8 @@ SELECT
     f.OFFER_PRESENTED,
     f.OBJECTIONS_FACED,
     f.SETTER_ID                                    AS SETTER,
-    COALESCE(setter.FIRST_NAME || ' ' || setter.LAST_NAME, setter.EMAIL) AS SETTER_NAME
+    COALESCE(setter.FIRST_NAME || ' ' || setter.LAST_NAME, setter.EMAIL) AS SETTER_NAME,
+    f.PIPELINE_RUN_ID
 FROM flat f
 LEFT JOIN sales_analytics.silver.close_crm_users_processed closer
     ON f.CLOSER_ID = closer.USER_ID
@@ -358,6 +370,8 @@ WITH activity_pivot AS (
         las.LEAD_ID,
         las.ACTIVITY_ID,
         CONVERT_TIMEZONE('UTC', 'America/New_York', las.ACTIVITY_AT) AS ACTIVITY_AT,
+        MAX(las.PIPELINE_RUN_ID)
+            OVER (PARTITION BY las.ACTIVITY_ID, las.LEAD_ID)   AS PIPELINE_RUN_ID,
         las.CUSTOM_ACTIVITY                   AS ACTIVITY_TYPE,
         las.MEETING_STATUS                    AS SALE_STATUS,
         MAX(CASE WHEN las.CUSTOM_ACTIVITY_OUTCOME_NAME = 'Contract Value'
@@ -397,7 +411,8 @@ SELECT
     TRY_TO_NUMERIC(f.CONTRACT_VALUE)               AS CONTRACTED_VALUE,
     COALESCE(TRY_TO_DATE(f.DATE_OF_SALE_RAW), f.ACTIVITY_AT::DATE) AS DATE_OF_SALE,
     f.PROGRAM,
-    TRY_TO_NUMERIC(f.CASH_COLLECTED)               AS CASH_COLLECTED
+    TRY_TO_NUMERIC(f.CASH_COLLECTED)               AS CASH_COLLECTED,
+    f.PIPELINE_RUN_ID
 FROM flat f
 LEFT JOIN sales_analytics.silver.close_crm_users_processed setter
     ON f.SETTER_ID = setter.USER_ID
@@ -414,6 +429,8 @@ WITH activity_pivot AS (
         las.LEAD_ID,
         las.ACTIVITY_ID,
         CONVERT_TIMEZONE('UTC', 'America/New_York', las.ACTIVITY_AT) AS ACTIVITY_AT,
+        MAX(las.PIPELINE_RUN_ID)
+            OVER (PARTITION BY las.ACTIVITY_ID, las.LEAD_ID)   AS PIPELINE_RUN_ID,
         las.CUSTOM_ACTIVITY,
         las.DEA_INTERNAL_EMAIL                AS SETTER_CLOSER_EMAIL,
         las.DEA_INTERNAL_NAME                 AS SETTER_CLOSER_NAME,
@@ -440,7 +457,8 @@ SELECT DISTINCT
     CUSTOM_ACTIVITY_OUTCOME_NAME,
     CUSTOM_ACTIVITY_OUTCOME,
     SETTER_CLOSER_EMAIL,
-    SETTER_CLOSER_NAME
+    SETTER_CLOSER_NAME,
+    PIPELINE_RUN_ID
 FROM activity_pivot;
 """
 
@@ -470,30 +488,35 @@ with DAG(
     build_inbound_strategies_booked = SQLExecuteQueryOperator(
         task_id="build_inbound_strategies_booked",
         conn_id=SNOWFLAKE_CONN_ID,
+        hook_params={"role": TRANSFORMER_ROLE},
         sql=SQL_INBOUND_STRATEGIES_BOOKED,
     )
 
     build_outbound_strategies_booked = SQLExecuteQueryOperator(
         task_id="build_outbound_strategies_booked",
         conn_id=SNOWFLAKE_CONN_ID,
+        hook_params={"role": TRANSFORMER_ROLE},
         sql=SQL_OUTBOUND_STRATEGIES_BOOKED,
     )
 
     build_all_strategies_details = SQLExecuteQueryOperator(
         task_id="build_all_strategies_details",
         conn_id=SNOWFLAKE_CONN_ID,
+        hook_params={"role": TRANSFORMER_ROLE},
         sql=SQL_ALL_STRATEGIES_DETAILS,
     )
 
     build_sales_details = SQLExecuteQueryOperator(
         task_id="build_sales_details",
         conn_id=SNOWFLAKE_CONN_ID,
+        hook_params={"role": TRANSFORMER_ROLE},
         sql=SQL_SALES_DETAILS,
     )
 
     build_outbound_prospect_dials = SQLExecuteQueryOperator(
         task_id="build_outbound_prospect_dials",
         conn_id=SNOWFLAKE_CONN_ID,
+        hook_params={"role": TRANSFORMER_ROLE},
         sql=SQL_OUTBOUND_PROSPECT_DIALS,
     )
 
@@ -501,6 +524,7 @@ with DAG(
     trigger_export = TriggerDagRunOperator(
         task_id="trigger_gold_to_export",
         trigger_dag_id="gold_to_export",
+        conf={"pipeline_run_id": "{{ (dag_run.conf or {}).get('pipeline_run_id') or run_id }}"},
         wait_for_completion=False,
     )
 

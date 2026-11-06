@@ -1,6 +1,6 @@
 <mxfile host="Electron">
-  <diagram name="Sales Analytics Architecture v7" id="sales-arch-v7">
-    <mxGraphModel dx="2051" dy="954" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1" pageHeight="1" math="0" shadow="0">
+  <diagram name="Sales Analytics Architecture v10" id="sales-arch-v10">
+    <mxGraphModel dx="2227" dy="1041" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1" pageHeight="1" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -23,7 +23,7 @@
           <mxGeometry height="30" width="360" x="200" y="80" as="geometry" />
         </mxCell>
         <mxCell id="z2-bg" parent="1" style="rounded=1;fillColor=none;strokeColor=#C00000;strokeWidth=2;dashed=1;arcSize=2;" value="" vertex="1">
-          <mxGeometry height="950" width="1390" x="670" y="80" as="geometry" />
+          <mxGeometry height="950" width="1390" x="738" y="87" as="geometry" />
         </mxCell>
         <mxCell id="z2-sf-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=16;fontStyle=1;fontColor=#0B6A91;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;❄ Snowflake&lt;/font&gt;" vertex="1">
           <mxGeometry height="30" width="200" x="874" y="80" as="geometry" />
@@ -58,28 +58,28 @@
         <mxCell id="mwaa-vpc-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=8;fontStyle=2;fontColor=#7030A0;" value="VPC · private subnet · NAT GW" vertex="1">
           <mxGeometry height="14" width="130" x="130" y="322" as="geometry" />
         </mxCell>
-        <mxCell id="mwaa" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.managed_workflows_for_apache_airflow;fillColor=#7030A0;strokeColor=none;fontColor=#7030A0;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="Amazon MWAA&#xa;Airflow (mw1.micro)" vertex="1">
+        <mxCell id="mwaa" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.managed_workflows_for_apache_airflow;fillColor=#7030A0;strokeColor=none;fontColor=#7030A0;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="Amazon MWAA&#xa;Airflow (mw1.medium)" vertex="1">
           <mxGeometry height="60" width="60" x="160" y="350" as="geometry" />
         </mxCell>
-        <mxCell id="sensor" parent="1" style="rhombus;fillColor=#F3EFFA;strokeColor=#7030A0;fontSize=10;fontStyle=1;fontColor=#7030A0;" value="SqlSensor&#xa;every 5 min" vertex="1">
+        <mxCell id="sensor" parent="1" style="rhombus;fillColor=#F3EFFA;strokeColor=#7030A0;fontSize=10;fontStyle=1;fontColor=#7030A0;" value="SqlSensor (reschedule)&#xa;every 15 min · 2 h timeout" vertex="1">
           <mxGeometry height="90" width="130" x="400" y="350" as="geometry" />
         </mxCell>
-        <mxCell id="s3" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;fillColor=#3F8624;strokeColor=none;fontColor=#3F8624;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="S3 Staging&#xa;dea-staging-bucket" vertex="1">
+        <mxCell id="s3" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;fillColor=#3F8624;strokeColor=none;fontColor=#3F8624;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="S3 Staging&#xa;sales-analytical-bucket" vertex="1">
           <mxGeometry height="60" width="60" x="440" y="540" as="geometry" />
         </mxCell>
-        <mxCell id="s3-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="partitioned by load_date · backfill: target_date" vertex="1">
-          <mxGeometry height="16" width="220" x="360" y="634" as="geometry" />
+        <mxCell id="s3-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="partitioned by load_date · versioned · Glacier IR after 90 days&#xa;backfill: trigger with target_date" vertex="1">
+          <mxGeometry height="30" width="340" x="300" y="632" as="geometry" />
         </mxCell>
         <mxCell id="sns" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.sns;fillColor=#E7157B;strokeColor=none;fontColor=#E7157B;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="AWS SNS" vertex="1">
           <mxGeometry height="60" width="60" x="80" y="540" as="geometry" />
         </mxCell>
-        <mxCell id="email" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ses;fillColor=#E7157B;strokeColor=none;fontColor=#E7157B;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="Email Alerts" vertex="1">
+        <mxCell id="email" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ses;fillColor=#E7157B;strokeColor=none;fontColor=#E7157B;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="Email / Slack&#xa;subscribers" vertex="1">
           <mxGeometry height="60" width="60" x="80" y="720" as="geometry" />
         </mxCell>
         <mxCell id="cw" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;fillColor=#E7157B;strokeColor=none;fontColor=#E7157B;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="CloudWatch" vertex="1">
           <mxGeometry height="60" width="60" x="280" y="720" as="geometry" />
         </mxCell>
-        <mxCell id="gh" parent="1" style="aspect=fixed;html=1;perimeter=mxPerimeter.ellipsePerimeter;whiteSpace=wrap;shape=mxgraph.mockup.containers.ellipse;fillColor=#333333;strokeColor=none;fontColor=#333333;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="GitHub" vertex="1">
+        <mxCell id="gh" parent="1" style="shape=image;html=1;imageAspect=1;aspect=fixed;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDE2IDE2Ij48cGF0aCBmaWxsPSIjMjQyOTJmIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik04IDBDMy41OCAwIDAgMy41OCAwIDhjMCAzLjU0IDIuMjkgNi41MyA1LjQ3IDcuNTkuNC4wNy41NS0uMTcuNTUtLjM4IDAtLjE5LS4wMS0uODItLjAxLTEuNDktMi4wMS4zNy0yLjUzLS40OS0yLjY5LS45NC0uMDktLjIzLS40OC0uOTQtLjgyLTEuMTMtLjI4LS4xNS0uNjgtLjUyLS4wMS0uNTMuNjMtLjAxIDEuMDguNTggMS4yMy44Mi43MiAxLjIxIDEuODcuODcgMi4zMy42Ni4wNy0uNTIuMjgtLjg3LjUxLTEuMDctMS43OC0uMi0zLjY0LS44OS0zLjY0LTMuOTUgMC0uODcuMzEtMS41OS44Mi0yLjE1LS4wOC0uMi0uMzYtMS4wMi4wOC0yLjEyIDAgMCAuNjctLjIxIDIuMi44Mi42NC0uMTggMS4zMi0uMjcgMi0uMjcuNjggMCAxLjM2LjA5IDIgLjI3IDEuNTMtMS4wNCAyLjItLjgyIDIuMi0uODIuNDQgMS4xLjE2IDEuOTIuMDggMi4xMi41MS41Ni44MiAxLjI3LjgyIDIuMTUgMCAzLjA3LTEuODcgMy43NS0zLjY1IDMuOTUuMjkuMjUuNTQuNzMuNTQgMS40OCAwIDEuMDctLjAxIDEuOTMtLjAxIDIuMiAwIC4yMS4xNS40Ni41NS4zOEE4LjAxMyA4LjAxMyAwIDAwMTYgOGMwLTQuNDItMy41OC04LTgtOHoiLz48L3N2Zz4=;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=11;fontStyle=1;fontColor=#333333;" value="GitHub" vertex="1">
           <mxGeometry height="60" width="60" x="417" y="676" as="geometry" />
         </mxCell>
         <mxCell id="sec" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.secrets_manager;fillColor=#DD344C;strokeColor=none;fontColor=#DD344C;fontSize=11;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="Secrets Manager" vertex="1">
@@ -94,11 +94,11 @@
         <mxCell id="br-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=14;fontStyle=1;fontColor=#7D5A00;" value="🥉 Bronze Layer" vertex="1">
           <mxGeometry height="26" width="240" x="895" y="940" as="geometry" />
         </mxCell>
-        <mxCell id="br-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="JSON_OBJECT + INSERT_DATE · COPY INTO" vertex="1">
-          <mxGeometry height="16" width="240" x="890" y="158" as="geometry" />
+        <mxCell id="br-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="JSON_OBJECT (text) · SOURCE_INSERT_DATE · PG_INSERT_DATE · LOAD_DATE&#xa;SOURCE_FILE_NAME · INGESTED_AT (UTC) · PIPELINE_RUN_ID&#xa;COPY INTO per load_date folder · runs as pipeline_loader" vertex="1">
+          <mxGeometry height="44" width="270" x="875" y="146" as="geometry" />
         </mxCell>
         <mxCell id="brt1-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D6B656;strokeColor=#BF9000;fontColor=#7D4F00;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  LEADS_RAW" vertex="1">
-          <mxGeometry height="40" width="230" x="895" y="210" as="geometry" />
+          <mxGeometry height="40" width="230" x="898" y="210" as="geometry" />
         </mxCell>
         <mxCell id="brt2-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D6B656;strokeColor=#BF9000;fontColor=#7D4F00;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  LEAD_ACTIVITIES_RAW" vertex="1">
           <mxGeometry height="40" width="230" x="895" y="270" as="geometry" />
@@ -116,7 +116,7 @@
           <mxGeometry height="26" width="280" x="1210" y="940" as="geometry" />
         </mxCell>
         <mxCell id="sv-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="UDTF sanitise → parse → flatten → TRY_CAST → MD5 → MERGE INTO" vertex="1">
-          <mxGeometry height="16" width="400" x="1165" y="174" as="geometry" />
+          <mxGeometry height="16" width="400" x="1165" y="144" as="geometry" />
         </mxCell>
         <mxCell id="svt1-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E5899;fontColor=#ffffff;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  CLOSE_CRM_USERS_PROCESSED" vertex="1">
           <mxGeometry height="40" width="310" x="1210" y="210" as="geometry" />
@@ -124,8 +124,8 @@
         <mxCell id="svt2-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E06B00;strokeColor=#C05000;fontColor=#ffffff;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  CUSTOM_ACTIVITIES  ⚠ process first" vertex="1">
           <mxGeometry height="40" width="310" x="1210" y="270" as="geometry" />
         </mxCell>
-        <mxCell id="svt3-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E5899;fontColor=#ffffff;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  LEAD_ACTIVITIES_PROCESSED (SCD2)" vertex="1">
-          <mxGeometry height="40" width="310" x="1210" y="350" as="geometry" />
+        <mxCell id="svt3-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E5899;fontColor=#ffffff;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  LEAD_ACTIVITIES_PROCESSED&#xa;SCD2 · close + insert in one transaction" vertex="1">
+          <mxGeometry height="56" width="310" x="1210" y="336" as="geometry" />
         </mxCell>
         <mxCell id="svt4-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E5899;fontColor=#ffffff;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  LEAD_ACTIVITIES_EMAIL" vertex="1">
           <mxGeometry height="40" width="310" x="1210" y="470" as="geometry" />
@@ -148,8 +148,8 @@
         <mxCell id="gd-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=14;fontStyle=1;fontColor=#7D5A00;" value="🥇 Gold Layer" vertex="1">
           <mxGeometry height="26" width="220" x="1540" y="940" as="geometry" />
         </mxCell>
-        <mxCell id="gd-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="Snowflake Views · business logic applied" vertex="1">
-          <mxGeometry height="16" width="400" x="1590" y="158" as="geometry" />
+        <mxCell id="gd-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="5 views · Kimball-style: activity-grain fact with resolved dimensions" vertex="1">
+          <mxGeometry height="16" width="400" x="1590" y="156" as="geometry" />
         </mxCell>
         <mxCell id="gv1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFD966;strokeColor=#D6B656;fontColor=#7D3C00;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="👁  INBOUND_STRATEGIES_BOOKED" vertex="1">
           <mxGeometry height="40" width="390" x="1595" y="210" as="geometry" />
@@ -166,34 +166,39 @@
         <mxCell id="gv5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFD966;strokeColor=#D6B656;fontColor=#7D3C00;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="👁  OUTBOUND_PROSPECT_DIALS" vertex="1">
           <mxGeometry height="40" width="390" x="1595" y="450" as="geometry" />
         </mxCell>
-        <mxCell id="gd-export-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="gold_to_export: build in staging → row-count check → INSERT OVERWRITE → GRANT SELECT" vertex="1">
-          <mxGeometry height="16" width="400" x="1590" y="588" as="geometry" />
+        <mxCell id="gd-export-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="gold_to_export: build in staging → row-count check → INSERT OVERWRITE → GRANT SELECT → SPICE refresh" vertex="1">
+          <mxGeometry height="16" width="420" x="1580" y="588" as="geometry" />
         </mxCell>
-        <mxCell id="qs" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.quicksight;fillColor=#8C4FFF;strokeColor=none;fontColor=#8C4FFF;fontSize=12;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="Amazon QuickSight" vertex="1">
+        <mxCell id="qs" parent="1" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.quicksight;fillColor=#8C4FFF;strokeColor=none;fontColor=#8C4FFF;fontSize=12;fontStyle=1;labelPosition=bottom;verticalLabelPosition=bottom;verticalAlign=top;align=center;" value="Amazon QuickSight (SPICE)" vertex="1">
           <mxGeometry height="70" width="70" x="2100" y="350" as="geometry" />
         </mxCell>
         <mxCell id="qs-d1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#1F2937;" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;📊 Inbound Setter&lt;/b&gt;&lt;/font&gt;" vertex="1">
           <mxGeometry height="16" width="160" x="2107" y="450" as="geometry" />
         </mxCell>
         <mxCell id="qs-d2" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#1F2937;" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;📊 Outbound Setter&lt;/b&gt;&lt;/font&gt;" vertex="1">
-          <mxGeometry height="16" width="160" x="2110" y="505" as="geometry" />
+          <mxGeometry height="16" width="160" x="2107" y="505" as="geometry" />
         </mxCell>
         <mxCell id="qs-d3" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#1F2937;" value="&lt;b&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;📊 Closer&lt;/font&gt;&lt;/b&gt;" vertex="1">
-          <mxGeometry height="16" width="160" x="2149" y="489" as="geometry" />
+          <mxGeometry height="16" width="160" x="2107" y="489" as="geometry" />
         </mxCell>
         <mxCell id="qs-d4" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=9;fontColor=#1F2937;" value="&lt;b&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;📊 Objections Faced&lt;/font&gt;&lt;/b&gt;" vertex="1">
           <mxGeometry height="16" width="160" x="2107" y="467" as="geometry" />
         </mxCell>
-        <mxCell id="a01" edge="1" parent="1" source="crm" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#00A1E0;strokeWidth=2;" target="rds-ico" value="daily sync 07:30">
+        <mxCell id="a01" edge="1" parent="1" source="crm" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#00A1E0;strokeWidth=2;" target="rds-ico" value="source refresh by 07:30 AM">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="a02" edge="1" parent="1" source="rds-ico" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#2E75B6;strokeWidth=2;" target="sensor" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="a03" edge="1" parent="1" source="mwaa" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#7030A0;strokeWidth=2;" target="sensor" value="">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="310" y="380" />
+              <mxPoint x="310" y="358.86" />
+            </Array>
+          </mxGeometry>
         </mxCell>
-        <mxCell id="a04" edge="1" parent="1" source="sensor" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#3F8624;strokeWidth=2;" target="s3" value="triggers extract">
+        <mxCell id="a04" edge="1" parent="1" source="sensor" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#3F8624;strokeWidth=2;" target="s3" value="4 parallel extracts · server-side cursor">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="a05" edge="1" parent="1" source="s3" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#29B5E8;strokeWidth=2;" target="ext-stage" value="">
@@ -283,7 +288,7 @@
         <mxCell id="gold-dq-gate" parent="1" style="rhombus;fillColor=#FFFFF0;strokeColor=#D6A000;fontSize=9;fontStyle=1;fontColor=#7D3C00;whiteSpace=wrap;" value="run_gold_regression_tests&#xa;(known-answer + pivot-isolation)" vertex="1">
           <mxGeometry height="74" width="190" x="1695" y="518" as="geometry" />
         </mxCell>
-        <mxCell id="a24" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#8C4FFF;strokeWidth=2;" value="QuickSight reads via reporting_wh">
+        <mxCell id="a24" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#8C4FFF;strokeWidth=2;" value="SPICE refresh daily, after publish; polled until COMPLETED (via reporting_wh)">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="2056" y="747" />
@@ -296,8 +301,12 @@
         <mxCell id="a-lp-closer" edge="1" parent="1" source="svt6-ico" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=8;fontStyle=2;strokeColor=#4472C4;strokeWidth=1;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="qs-d3" value="LEAD_ROUTE join">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="a25" edge="1" parent="1" source="mwaa" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#E7157B;strokeWidth=1;dashed=1;" target="sns" value="error alert">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="a25" edge="1" parent="1" source="mwaa" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#E7157B;strokeWidth=1;dashed=1;" target="sns" value="failure callback">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="102.32" y="380.05" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="a26" edge="1" parent="1" source="sns" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#E7157B;strokeWidth=1;dashed=1;" target="email" value="">
           <mxGeometry relative="1" as="geometry" />
@@ -305,11 +314,13 @@
         <mxCell id="a27" edge="1" parent="1" source="mwaa" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#E7157B;strokeWidth=1;dashed=1;" target="cw" value="logs">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="a28" edge="1" parent="1" source="gh" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#333;strokeWidth=1;dashed=1;" target="mwaa" value="CI/CD">
+        <mxCell id="a28" edge="1" parent="1" source="gh" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#333;strokeWidth=1;dashed=1;" target="mwaa" value="DAG code (source control)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="a29" edge="1" parent="1" source="sec" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#DD344C;strokeWidth=1;dashed=1;" target="mwaa" value="Airflow connections backend">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="a29" edge="1" parent="1" source="sec" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#DD344C;strokeWidth=1;dashed=1;" target="mwaa" value="connections + variables backend · airflow_svc_user private key">
+          <mxGeometry relative="1" x="0.0018" y="-13" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="a30" edge="1" parent="1" source="mwaa" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;strokeColor=#7030A0;strokeWidth=1;dashed=1;" target="sv-zone" value="orchestrates">
           <mxGeometry relative="1" x="0.0944" y="-7" as="geometry">
@@ -331,14 +342,14 @@
         <mxCell id="svt7-ico" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2E5899;fontColor=#ffffff;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  CUSTOM_ACTIVITIES_ALL_LEADS_DETAILS" vertex="1">
           <mxGeometry height="40" width="310" x="1210" y="410" as="geometry" />
         </mxCell>
-        <mxCell id="sv-note2" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="Incremental: windowed Bronze reads · latest date_updated wins" vertex="1">
-          <mxGeometry height="16" width="400" x="1165" y="190" as="geometry" />
+        <mxCell id="sv-note2" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="Incremental: watermark + 1-day lookback · latest date_updated wins · since_date backfill" vertex="1">
+          <mxGeometry height="16" width="370" x="1180" y="162" as="geometry" />
         </mxCell>
-        <mxCell id="gx-gate" parent="1" style="rhombus;fillColor=#EEF3FF;strokeColor=#4472C4;fontSize=9;fontStyle=1;fontColor=#1F3864;whiteSpace=wrap;" value="validate_lap_staging&#xa;(Great Expectations,&#xa;quarantine · 10% stop)" vertex="1">
-          <mxGeometry height="70" width="150" x="1210" y="690" as="geometry" />
+        <mxCell id="gx-gate" parent="1" style="rhombus;fillColor=#EEF3FF;strokeColor=#4472C4;fontSize=9;fontStyle=1;fontColor=#1F3864;whiteSpace=wrap;" value="validate_lap_staging&#xa;(GE pushed down to&#xa;Snowflake SQL · 10% stop)" vertex="1">
+          <mxGeometry height="76" width="150" x="1210" y="690" as="geometry" />
         </mxCell>
-        <mxCell id="dq-tables" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E2F3;strokeColor=#4472C4;fontColor=#1F3864;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  DQ_RUN_LOG · DQ_REJECTED_ROWS (quarantine)" vertex="1">
-          <mxGeometry height="54" width="150" x="1210" y="795" as="geometry" />
+        <mxCell id="dq-tables" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E2F3;strokeColor=#4472C4;fontColor=#1F3864;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  DQ_RUN_LOG · DQ_REJECTED_ROWS&#xa;quarantine: REPLAYED · SUPERSEDED · ACCEPTED_LOSS" vertex="1">
+          <mxGeometry height="72" width="150" x="1210" y="795" as="geometry" />
         </mxCell>
         <mxCell id="wm-table" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontColor=#7D3C00;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  ETL_WATERMARK (advances only after all steps pass)" vertex="1">
           <mxGeometry height="54" width="150" x="1370" y="795" as="geometry" />
@@ -355,7 +366,7 @@
         <mxCell id="a-br2-cald" edge="1" parent="1" source="brt2-ico" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#4472C4;strokeWidth=2;" target="svt7-ico" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="gd-rw" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontColor=#3B1F5C;fontSize=10;fontStyle=1;align=center;verticalAlign=middle;" value="🔒  reporting_wh (X-Small, auto-suspend) · report_reader (read-only)" vertex="1">
+        <mxCell id="gd-rw" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontColor=#3B1F5C;fontSize=10;fontStyle=1;align=center;verticalAlign=middle;" value="🔒  reporting_wh (X-Small, auto-suspend 60 s) · report_reader (read-only)" vertex="1">
           <mxGeometry height="44" width="390" x="1595" y="791" as="geometry" />
         </mxCell>
         <mxCell id="a-gate-rpt" edge="1" parent="1" source="gold-dq-gate" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;fontColor=#1F2937;strokeColor=#D6A000;strokeWidth=2;" target="gd-rpt" value="then build">
@@ -364,8 +375,8 @@
         <mxCell id="a-rpt-rw" edge="1" parent="1" source="gd-rpt" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;fontColor=#1F2937;strokeColor=#9673A6;strokeWidth=2;" target="gd-rw" value="GRANT SELECT">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="rbac-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=10;fontColor=#1F2937;fontStyle=1;" value="Snowflake RBAC: pipeline_loader (Bronze) · pipeline_transformer (Silver, Gold) · report_reader (read-only on gold.rpt_*) · compute isolation: reporting_wh separate from the transform warehouse" vertex="1">
-          <mxGeometry height="20" width="1290" x="730" y="1000" as="geometry" />
+        <mxCell id="rbac-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=10;fontColor=#1F2937;fontStyle=1;" value="Snowflake RBAC hierarchy: pipeline_loader (writes Bronze) → pipeline_transformer (builds Silver and Gold, inherits loader) → sysadmin · report_reader (read-only on gold.rpt_*) → analyst_role&#xa;Service users, RSA key pairs: airflow_svc_user (loader, transformer) · quicksight_svc (report_reader) · compute isolation: reporting_wh separate from the transform warehouse" vertex="1">
+          <mxGeometry height="32" width="1290" x="730" y="996" as="geometry" />
         </mxCell>
         <mxCell id="ozRzFm6qRBlgzAkKcdja-1" edge="1" parent="1" source="sv-dq-gate" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#D6A000;strokeWidth=2;" target="gd-rpt" value="">
           <mxGeometry relative="1" as="geometry">
@@ -375,6 +386,38 @@
         </mxCell>
         <mxCell id="gd-rpt" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFD966;strokeColor=#D6B656;fontColor=#7D3C00;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;" value="🗄  GOLD.RPT_* — 4 persistent report tables" vertex="1">
           <mxGeometry height="44" width="390" x="1595" y="668" as="geometry" />
+        </mxCell>
+        <mxCell id="alert-note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#9D0B50;fontStyle=2;whiteSpace=wrap;" value="SNS primary · SMTP backup&#xa;data-quality warnings use the same path" vertex="1">
+          <mxGeometry height="30" width="190" x="15" y="826" as="geometry" />
+        </mxCell>
+        <mxCell id="a-replay" edge="1" parent="1" source="dq-tables" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;fontStyle=2;fontColor=#1F2937;strokeColor=#4472C4;strokeWidth=2;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="svt3-ico" value="replay">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1202" y="828" />
+              <mxPoint x="1202" y="370" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="sa-svc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8DAEF;strokeColor=#7030A0;fontColor=#2E1A47;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="🔑  airflow_svc_user (service user, RSA 2048 key pair)&#xa;assumes pipeline_loader for Bronze, pipeline_transformer after" vertex="1">
+          <mxGeometry height="60" width="210" x="60" y="232" as="geometry" />
+        </mxCell>
+        <mxCell id="run-id-note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#2E75B6;fontColor=#0D2A4A;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="🔗  PIPELINE_RUN_ID: created by postgres_to_s3, passed in each trigger conf, written to Bronze and Silver rows, exposed on the Gold views" vertex="1">
+          <mxGeometry height="74" width="196" x="676" y="184" as="geometry" />
+        </mxCell>
+        <mxCell id="sv-note3" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="pipeline_transformer · PIPELINE_RUN_ID on every MERGE" vertex="1">
+          <mxGeometry height="16" width="370" x="1180" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="mask-note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#C2185B;fontColor=#5C0B2E;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="🛡  Dynamic masking (IS_ROLE_IN_SESSION): SENDER · ENVELOPE_JSON · BODY_TEXT · ATTENDEES · TEXT · RAW_RECORD visible only to pipeline roles. Gold carries no lead contact fields." vertex="1">
+          <mxGeometry height="60" width="310" x="1210" y="876" as="geometry" />
+        </mxCell>
+        <mxCell id="spice-poll" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;fontColor=#14361A;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="⏱  SPICE refresh: boto3 create_ingestion (FULL_REFRESH), then a polling sensor on describe_ingestion until COMPLETED (30 s poke, 20 min timeout). FAILED or CANCELLED fails the DAG and alerts." vertex="1">
+          <mxGeometry height="50" width="390" x="1595" y="612" as="geometry" />
+        </mxCell>
+        <mxCell id="loader-tag" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#374151;fontStyle=2;" value="loader role · key pair" vertex="1">
+          <mxGeometry height="16" width="190" x="679" y="486" as="geometry" />
+        </mxCell>
+        <mxCell id="dag-guard-note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8DAEF;strokeColor=#7030A0;fontColor=#2E1A47;fontSize=9;fontStyle=1;align=center;verticalAlign=middle;" value="max_active_runs=1 · catchup=False on all 5 DAGs&#xa;Daily SLA 10:00 AM" vertex="1">
+          <mxGeometry height="58" width="112" x="538" y="407" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

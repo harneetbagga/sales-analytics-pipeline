@@ -22,6 +22,7 @@ Task order:
     -> [export_inbound_setter, export_outbound_setter,
         export_closer, export_objections] (parallel)
     -> refresh_quicksight_task
+    -> wait_for_spice_refresh (polls each SPICE refresh until COMPLETED)
 
 The regression test suite (tests/test_gold_regression.py) runs FIRST,
 as a gate — if a known-answer Gold-layer check fails (e.g. the
@@ -87,7 +88,8 @@ Task order:
   run_gold_regression_tests (gate: known-answer + pivot-isolation tests)
     -> [build_inbound_setter_report, build_outbound_setter_report,
         build_closer_report, build_objections_faced_report] (parallel)
-    -> refresh_quicksight_datasets (SPICE refresh; skipped for direct query)
+    -> refresh_quicksight_datasets (starts an async full SPICE refresh per dataset; skipped when off)
+    -> wait_for_spice_refresh (sensor: polls each refresh until COMPLETED; FAILED fails the DAG)
 
 The regression suite runs FIRST, as a gate: if a known-answer Gold check or
 the pivot-isolation check fails, the DAG fails before any report is published
@@ -111,6 +113,7 @@ from datetime import datetime, timedelta, timezone
 
 from airflow import DAG
 from alerts import notify_failure
+from snowflake_auth import TRANSFORMER_ROLE, uses_key_pair, load_private_key_pem
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.hooks.base import BaseHook
 
@@ -119,7 +122,10 @@ import time
 import logging
 import os
 import subprocess
+import tempfile
 from airflow.operators.python import PythonOperator
+from airflow.sensors.python import PythonSensor
+from airflow.exceptions import AirflowFailException
 
 # AWS account that owns the QuickSight datasets. Set it in the environment
 # (MWAA: an Airflow environment/config option); it is only used by the
@@ -739,7 +745,7 @@ def build_report_table(report_key, min_rows=1, **context):
     with the new shape (INSERT OVERWRITE does not change a table's columns).
     """
     report = EXPORT_REPORTS[report_key]
-    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID)
+    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID, role=TRANSFORMER_ROLE)
     staging = report["staging_table"]
     target = report["target_table"]
 
@@ -804,10 +810,9 @@ def run_gold_regression_tests(**context):
     test_env.update({
         "SNOWFLAKE_ACCOUNT":   extra.get("account", ""),
         "SNOWFLAKE_USER":      conn.login or "",
-        "SNOWFLAKE_PASSWORD":  conn.password or "",
         "SNOWFLAKE_WAREHOUSE": extra.get("warehouse", WAREHOUSE),
         "SNOWFLAKE_DATABASE":  extra.get("database", DATABASE),
-        "SNOWFLAKE_ROLE":      extra.get("role", ""),
+        "SNOWFLAKE_ROLE":      TRANSFORMER_ROLE,
     })
 
     tests_dir = os.path.join(os.path.dirname(__file__), "tests")
@@ -817,12 +822,27 @@ def run_gold_regression_tests(**context):
     ]
     logging.info("Running Gold regression suite: %s", test_files)
 
-    result = subprocess.run(
-        ["pytest", *test_files, "-v", "--tb=short"],
-        env=test_env,
-        capture_output=True,
-        text=True,
-    )
+    # The tests connect with the same credentials as the DAG. A service user has a key
+    # pair, so write the key to a private temp file for the test process (deleted right
+    # after) and pass its path; a password connection is passed as before.
+    with tempfile.TemporaryDirectory() as key_dir:
+        if uses_key_pair(extra):
+            key_path = os.path.join(key_dir, "snowflake_key.pem")
+            fd = os.open(key_path, os.O_WRONLY | os.O_CREAT, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(load_private_key_pem(extra))
+            test_env["SNOWFLAKE_PRIVATE_KEY_FILE"] = key_path
+            if conn.password:  # passphrase of an encrypted key
+                test_env["SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"] = conn.password
+        else:
+            test_env["SNOWFLAKE_PASSWORD"] = conn.password or ""
+
+        result = subprocess.run(
+            ["pytest", *test_files, "-v", "--tb=short"],
+            env=test_env,
+            capture_output=True,
+            text=True,
+        )
 
     logging.info("pytest stdout:\n%s", result.stdout)
     if result.stderr:
@@ -847,12 +867,19 @@ QUICKSIGHT_REFRESH_SPICE = False
 
 
 def refresh_quicksight_datasets(**context):
+    """Start an asynchronous full SPICE refresh for every report dataset.
+
+    create_ingestion returns as soon as the refresh is queued, so this task
+    only starts the refreshes. It returns {dataset_name: ingestion_id}, which
+    wait_for_spice_refresh reads from XCom to poll each one to completion.
+    """
     if not QUICKSIGHT_REFRESH_SPICE:
-        logging.info("QuickSight datasets use direct query; no SPICE refresh needed.")
-        return
+        logging.info("SPICE refresh is disabled (QUICKSIGHT_REFRESH_SPICE is False); nothing to refresh.")
+        return {}
     client = boto3.client("quicksight", region_name=QUICKSIGHT_REGION)
     run_id = int(time.time())
     failures = []
+    started = {}
 
     for name, dataset_id in QUICKSIGHT_DATASETS.items():
         ingestion_id = f"{dataset_id.replace('-', '')}-{run_id}"
@@ -863,6 +890,7 @@ def refresh_quicksight_datasets(**context):
                 AwsAccountId=QUICKSIGHT_ACCOUNT_ID,
                 IngestionType="FULL_REFRESH",
             )
+            started[name] = ingestion_id
             logging.info(
                 "Triggered SPICE refresh for %s (dataset_id=%s, ingestion_id=%s): %s",
                 name, dataset_id, ingestion_id, resp["IngestionStatus"],
@@ -873,11 +901,69 @@ def refresh_quicksight_datasets(**context):
 
     if failures:
         raise RuntimeError(f"QuickSight refresh failed for: {failures}")
+    return started
+
+
+# QuickSight ingestion states: INITIALIZED, QUEUED and RUNNING are still in
+# progress, COMPLETED is success, FAILED and CANCELLED are terminal failures.
+SPICE_FAILED_STATES = ("FAILED", "CANCELLED")
+
+
+def check_spice_ingestions(client, account_id, ingestions):
+    """Poll every started refresh once.
+
+    Returns True when all are COMPLETED, False while any is still running, and
+    raises AirflowFailException (no task retry, retrying would only re-poll the
+    same dead ingestion) as soon as one is FAILED or CANCELLED.
+    """
+    still_running = []
+    for name, ingestion_id in ingestions.items():
+        ingestion = client.describe_ingestion(
+            DataSetId=QUICKSIGHT_DATASETS[name],
+            IngestionId=ingestion_id,
+            AwsAccountId=account_id,
+        )["Ingestion"]
+        status = ingestion["IngestionStatus"]
+        if status == "COMPLETED":
+            continue
+        if status in SPICE_FAILED_STATES:
+            error = ingestion.get("ErrorInfo") or {}
+            raise AirflowFailException(
+                f"SPICE refresh {status} for {name} (ingestion_id={ingestion_id}): "
+                f"{error.get('Type', 'no error type')} - {error.get('Message', 'no message')}"
+            )
+        still_running.append(f"{name}={status}")
+    if still_running:
+        logging.info("SPICE refresh still in progress: %s", ", ".join(still_running))
+        return False
+    return True
+
+
+def spice_refresh_complete(ti=None, **context):
+    """Sensor callable: True once every refresh started above has completed."""
+    ingestions = ti.xcom_pull(task_ids="refresh_quicksight_datasets") if ti else None
+    if not ingestions:
+        logging.info("No SPICE refresh was started (disabled); nothing to wait for.")
+        return True
+    client = boto3.client("quicksight", region_name=QUICKSIGHT_REGION)
+    return check_spice_ingestions(client, QUICKSIGHT_ACCOUNT_ID, ingestions)
 
 
 refresh_quicksight_task = PythonOperator(
     task_id="refresh_quicksight_datasets",
     python_callable=refresh_quicksight_datasets,
+)
+
+# Waits (reschedule mode, so it holds no worker slot) until each SPICE refresh
+# reports COMPLETED. gold_to_export is only marked successful after this, and
+# a FAILED or CANCELLED refresh fails the DAG and sends the failure alert.
+wait_for_spice_refresh = PythonSensor(
+    task_id="wait_for_spice_refresh",
+    python_callable=spice_refresh_complete,
+    poke_interval=30,
+    timeout=1200,
+    mode="reschedule",
+    retries=0,
 )
 
 # ─────────────────────────────────────────────
@@ -947,4 +1033,4 @@ with DAG(
         export_outbound_setter,
         export_closer,
         export_objections,
-    ] >> refresh_quicksight_task
+    ] >> refresh_quicksight_task >> wait_for_spice_refresh

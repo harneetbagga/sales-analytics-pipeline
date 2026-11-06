@@ -36,10 +36,11 @@ Each S3 line has exactly three keys: `JSON_OBJECT`, `SOURCE_INSERT_DATE`, `PG_IN
 | LOAD_DATE | no source in the file: the `target_date` used for the run, cast to DATE (the same value as the `load_date=` folder) |
 | SOURCE_FILE_NAME | no source in the file: Snowflake's `METADATA$FILENAME`, the S3 file the row came from (path relative to the stage, e.g. `leads_raw/load_date=2026-10-20/leads_raw.json`) |
 | INGESTED_AT | no source in the file: the time the COPY ran, `CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ` (UTC) |
+| PIPELINE_RUN_ID | no source in the file: the Airflow run_id of the `postgres_to_s3` run that started the pipeline, passed down in the trigger conf (falls back to the DAG's own run_id on a manual or standalone run) |
 
 `ON_ERROR = ABORT_STATEMENT`; `FORCE = TRUE` only when the run config has `force: true`.
 
-Bronze tables: `LEAD_ACTIVITES_RAW`, `CUSTOM_ACTIVITES_RAW`, `CLOSE_CRM_USERS_RAW`, `LEADS_RAW`. Each has `JSON_OBJECT`, `SOURCE_INSERT_DATE`, `PG_INSERT_DATE`, `LOAD_DATE`, `SOURCE_FILE_NAME`, `INGESTED_AT`. The last two are lineage columns (which file, loaded when); rows loaded before they were added hold NULL. Silver reads `JSON_OBJECT` and `LOAD_DATE` (it becomes INSERT_DATE in Silver).
+Bronze tables: `LEAD_ACTIVITES_RAW`, `CUSTOM_ACTIVITES_RAW`, `CLOSE_CRM_USERS_RAW`, `LEADS_RAW`. Each has `JSON_OBJECT`, `SOURCE_INSERT_DATE`, `PG_INSERT_DATE`, `LOAD_DATE`, `SOURCE_FILE_NAME`, `INGESTED_AT`, `PIPELINE_RUN_ID`. The last three are lineage columns (which file, loaded when, by which pipeline run); rows loaded before they were added hold NULL. Silver reads `JSON_OBJECT` and `LOAD_DATE` (it becomes INSERT_DATE in Silver).
 
 ## Silver run window and control table (Oct 2026, incremental Silver)
 Silver no longer re-reads all of Bronze each run. `bronze_to_silver` first plans a window per Bronze source, runs every Silver step inside it, and commits the window only after the last step succeeds. This is design logic (manual lineage).
@@ -311,3 +312,8 @@ Call-level and lead-level metrics are aggregated separately and joined once at (
 7. Timezone: the five Gold views convert to Eastern, the Closer Report uses the business-entered strategy call date. The Eastern vs UTC convention is still an open question with the business stakeholder, not a code defect.
 8. **Resolved (2026-10).** `gold_to_export.py` builds four persistent Gold report tables (`gold.rpt_*`) through a validated, atomic publish (`INSERT OVERWRITE`), grants SELECT to the read-only `report_reader` role, and QuickSight reads them through `reporting_wh` under that role. The S3 CSV path remains only behind the `LEGACY_S3_EXPORT` switch (off), and the SPICE refresh behind `QUICKSIGHT_REFRESH_SPICE` (currently off).
 9. **Resolved and validated (2026-10).** Silver is incremental (watermark, windowed Bronze reads, latest-`date_updated` dedup). It was checked against a full rebuild: a zero-copy clone of Silver, a full refresh, then EXCEPT comparisons in both directions on key and MD5_HASH (the summary table also compares outcome, name and email); all five tables match. The comparison first failed for two real reasons, both now fixed: event time was ranked ahead of `date_updated` when picking the newest activity version (5 activities), and the users dedup tied on `LOAD_DATE` (about 184,000 summary rows changed name spelling between runs). `dags/tests/test_silver_incremental.py` (unit and source checks) and `dags/tests/test_silver_incremental_parity.py` (live; needs `SILVER_PARITY_BASELINE`) cover this. Open: no scheduled reconciliation yet, and source deletions are not propagated.
+
+
+## PIPELINE_RUN_ID across layers
+
+One ID per pipeline run, set at the start (`postgres_to_s3`) and handed to each DAG through the trigger conf: Bronze COPY writes it, every Silver MERGE sets it on insert and on update, and the five Gold views expose it (`MAX(PIPELINE_RUN_ID)` per activity, so one value per activity row). A Silver row shows the last run that inserted or updated it, not every run that saw it. The Gold value is the highest run ID string among that activity's Silver rows. Rows written before the column existed hold NULL. The quarantine and data-quality tables keep their own `DAG_RUN_ID` (the Silver DAG's run) and are not changed.

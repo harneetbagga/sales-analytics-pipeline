@@ -5,7 +5,8 @@ CREATE OR REPLACE TABLE sales_analytics.bronze.close_crm_users_raw (
     PG_INSERT_DATE     VARCHAR,
     LOAD_DATE          DATE,
     SOURCE_FILE_NAME   VARCHAR,
-    INGESTED_AT        TIMESTAMP_NTZ
+    INGESTED_AT        TIMESTAMP_NTZ,
+    PIPELINE_RUN_ID    VARCHAR
 );
 
 CREATE OR REPLACE TABLE sales_analytics.bronze.custom_activites_raw (
@@ -14,7 +15,8 @@ CREATE OR REPLACE TABLE sales_analytics.bronze.custom_activites_raw (
     PG_INSERT_DATE     VARCHAR,
     LOAD_DATE          DATE,
     SOURCE_FILE_NAME   VARCHAR,
-    INGESTED_AT        TIMESTAMP_NTZ
+    INGESTED_AT        TIMESTAMP_NTZ,
+    PIPELINE_RUN_ID    VARCHAR
 );
 
 CREATE OR REPLACE TABLE sales_analytics.bronze.leads_raw (
@@ -23,7 +25,8 @@ CREATE OR REPLACE TABLE sales_analytics.bronze.leads_raw (
     PG_INSERT_DATE     VARCHAR,
     LOAD_DATE          DATE,
     SOURCE_FILE_NAME   VARCHAR,
-    INGESTED_AT        TIMESTAMP_NTZ
+    INGESTED_AT        TIMESTAMP_NTZ,
+    PIPELINE_RUN_ID    VARCHAR
 );
 
 CREATE OR REPLACE TABLE sales_analytics.bronze.lead_activites_raw (
@@ -32,7 +35,8 @@ CREATE OR REPLACE TABLE sales_analytics.bronze.lead_activites_raw (
     PG_INSERT_DATE     VARCHAR,
     LOAD_DATE          DATE,
     SOURCE_FILE_NAME   VARCHAR,
-    INGESTED_AT        TIMESTAMP_NTZ
+    INGESTED_AT        TIMESTAMP_NTZ,
+    PIPELINE_RUN_ID    VARCHAR
 );
 
 SELECT TABLE_NAME, COLUMN_NAME

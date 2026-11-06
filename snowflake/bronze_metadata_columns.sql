@@ -17,6 +17,12 @@ ALTER TABLE close_crm_users_raw  ADD COLUMN IF NOT EXISTS INGESTED_AT TIMESTAMP_
 ALTER TABLE custom_activites_raw ADD COLUMN IF NOT EXISTS SOURCE_FILE_NAME VARCHAR;
 ALTER TABLE custom_activites_raw ADD COLUMN IF NOT EXISTS INGESTED_AT TIMESTAMP_NTZ;
 
+-- Pipeline run ID: the postgres_to_s3 run that started the pipeline, carried to Silver and Gold.
+ALTER TABLE leads_raw            ADD COLUMN IF NOT EXISTS PIPELINE_RUN_ID VARCHAR;
+ALTER TABLE lead_activites_raw   ADD COLUMN IF NOT EXISTS PIPELINE_RUN_ID VARCHAR;
+ALTER TABLE close_crm_users_raw  ADD COLUMN IF NOT EXISTS PIPELINE_RUN_ID VARCHAR;
+ALTER TABLE custom_activites_raw ADD COLUMN IF NOT EXISTS PIPELINE_RUN_ID VARCHAR;
+
 -- Rows loaded before these columns existed have NULL in both. For clean lineage, reload Bronze
 -- (TRUNCATE TABLE also clears the load metadata, so the files can be loaded again), then:
 --   python scripts/backfill_bronze.py

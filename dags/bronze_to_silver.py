@@ -97,6 +97,9 @@ from silver_incremental import (
 import alerts
 import quarantine as qr
 from alerts import notify_failure
+from snowflake_auth import (
+    TRANSFORMER_ROLE, uses_key_pair, load_private_key_pem, private_key_der_b64,
+)
 
 # ─────────────────────────────────────────────
 # SETTINGS
@@ -120,7 +123,7 @@ USE_CONTEXT = f"""
 DQ_FAIL_THRESHOLD_PCT = 10.0          # >= this % rejected -> stop the pipeline
 # Alerting (SNS topic first, SMTP as the backup) lives in alerts.py, shared with the
 # failure callback of all five DAGs.
-DQ_GX_ROLE_DEFAULT   = "PIPELINE_TRANSFORMER"
+DQ_GX_ROLE_DEFAULT   = TRANSFORMER_ROLE
 
 LAP_KNOWN_TYPES = ("Call", "SMS", "Email", "Note", "Meeting", "Created",
                    "CustomActivity", "LeadMerge")
@@ -194,18 +197,19 @@ WHEN MATCHED AND target.MD5_HASH <> source.MD5_HASH THEN
         target.DATE_CREATED = source.DATE_CREATED,
         target.DATE_UPDATED = source.DATE_UPDATED,
         target.MD5_HASH     = source.MD5_HASH,
-        target.UPDATE_DATE  = CURRENT_TIMESTAMP()
+        target.UPDATE_DATE  = CURRENT_TIMESTAMP(),
+        target.PIPELINE_RUN_ID = '__RUN_ID__'
 
 WHEN NOT MATCHED THEN
     INSERT (
         USER_ID, EMAIL, FIRST_NAME, LAST_NAME,
         MD5_HASH, DATE_CREATED, DATE_UPDATED,
-        INSERT_DATE, UPDATE_DATE
+        INSERT_DATE, UPDATE_DATE, PIPELINE_RUN_ID
     )
     VALUES (
         source.USER_ID, source.EMAIL, source.FIRST_NAME, source.LAST_NAME,
         source.MD5_HASH, source.DATE_CREATED, source.DATE_UPDATED,
-        source.INSERT_DATE, CURRENT_TIMESTAMP()
+        source.INSERT_DATE, CURRENT_TIMESTAMP(), '__RUN_ID__'
     );
 """
 
@@ -257,18 +261,19 @@ WHEN MATCHED AND target.MD5_HASH <> source.MD5_HASH THEN
         target.CUSTOM_ACTIVITY_NAME         = source.CUSTOM_ACTIVITY_NAME,
         target.CUSTOM_ACTIVITY_OUTCOME_NAME = source.CUSTOM_ACTIVITY_OUTCOME_NAME,
         target.MD5_HASH                     = source.MD5_HASH,
-        target.UPDATE_DATE                  = CURRENT_TIMESTAMP()
+        target.UPDATE_DATE                  = CURRENT_TIMESTAMP(),
+        target.PIPELINE_RUN_ID = '__RUN_ID__'
 
 WHEN NOT MATCHED THEN
     INSERT (
         CUSTOM_ACTIVITY_ID, CUSTOM_ACTIVITY_NAME,
         CUSTOM_ACTIVITY_OUTCOME_ID, CUSTOM_ACTIVITY_OUTCOME_NAME,
-        MD5_HASH, INSERT_DATE, UPDATE_DATE
+        MD5_HASH, INSERT_DATE, UPDATE_DATE, PIPELINE_RUN_ID
     )
     VALUES (
         source.CUSTOM_ACTIVITY_ID, source.CUSTOM_ACTIVITY_NAME,
         source.CUSTOM_ACTIVITY_OUTCOME_ID, source.CUSTOM_ACTIVITY_OUTCOME_NAME,
-        source.MD5_HASH, source.INSERT_DATE, CURRENT_TIMESTAMP()
+        source.MD5_HASH, source.INSERT_DATE, CURRENT_TIMESTAMP(), '__RUN_ID__'
     );
 """
 
@@ -320,18 +325,19 @@ WHEN MATCHED AND target.MD5_HASH <> source.MD5_HASH THEN
         target.ACTIVITY_AT        = source.ACTIVITY_AT,
         target.WRAPPED_ACTIVITIES = source.WRAPPED_ACTIVITIES,
         target.MD5_HASH           = source.MD5_HASH,
-        target.UPDATE_DATE        = CURRENT_TIMESTAMP()
+        target.UPDATE_DATE        = CURRENT_TIMESTAMP(),
+        target.PIPELINE_RUN_ID = '__RUN_ID__'
 
 WHEN NOT MATCHED THEN
     INSERT (
         LEAD_ID, ACTIVITY_ID, ACTIVITY_AT,
         WRAPPED_ACTIVITIES, MD5_HASH,
-        INSERT_DATE, UPDATE_DATE
+        INSERT_DATE, UPDATE_DATE, PIPELINE_RUN_ID
     )
     VALUES (
         source.LEAD_ID, source.ACTIVITY_ID, source.ACTIVITY_AT,
         source.WRAPPED_ACTIVITIES, source.MD5_HASH,
-        source.INSERT_DATE, CURRENT_TIMESTAMP()
+        source.INSERT_DATE, CURRENT_TIMESTAMP(), '__RUN_ID__'
     );
 """
 
@@ -449,7 +455,7 @@ INSERT INTO sales_analytics.silver.lead_activities_processed (
     MEETING_STATUS, ACTIVITY_AT, DATE_CREATED, DATE_UPDATED,
     CREATED_BY_USER, UPDATED_BY_USER,
     INSERT_DATE, UPDATE_DATE, MD5_HASH,
-    EFFECTIVE_START_DATE, EFFECTIVE_END_DATE, IS_CURRENT
+    EFFECTIVE_START_DATE, EFFECTIVE_END_DATE, IS_CURRENT, PIPELINE_RUN_ID
 )
 SELECT
     source.ACTIVITY_ID, source.LEAD_ID, source.CONTACT_ID, source.USER_ID,
@@ -460,7 +466,7 @@ SELECT
     source.ACTIVITY_AT, source.DATE_CREATED, source.DATE_UPDATED,
     source.CREATED_BY_USER, source.UPDATED_BY_USER,
     source.INSERT_DATE, CURRENT_TIMESTAMP(), source.MD5_HASH,
-    CURRENT_TIMESTAMP(), NULL, TRUE
+    CURRENT_TIMESTAMP(), NULL, TRUE, '__RUN_ID__'
 FROM """ + SQL_LAP_SOURCE_SUBQUERY + """ AS source
 LEFT JOIN sales_analytics.silver.lead_activities_processed AS target
     ON  target.ACTIVITY_ID = source.ACTIVITY_ID
@@ -502,7 +508,8 @@ CREATE TABLE IF NOT EXISTS silver.leads_processed (
     DATE_UPDATED         TIMESTAMP_NTZ,
     INSERT_DATE          TIMESTAMP_NTZ,
     UPDATE_DATE          TIMESTAMP_NTZ,
-    MD5_HASH             VARCHAR
+    MD5_HASH             VARCHAR,
+    PIPELINE_RUN_ID      VARCHAR
 );
 
 MERGE INTO sales_analytics.silver.leads_processed AS target
@@ -562,20 +569,21 @@ WHEN MATCHED AND target.MD5_HASH <> source.MD5_HASH THEN
         target.CURRENT_SALARY = source.CURRENT_SALARY,
         target.DATE_UPDATED   = source.DATE_UPDATED,
         target.MD5_HASH       = source.MD5_HASH,
-        target.UPDATE_DATE    = CURRENT_TIMESTAMP()
+        target.UPDATE_DATE    = CURRENT_TIMESTAMP(),
+        target.PIPELINE_RUN_ID = '__RUN_ID__'
 WHEN NOT MATCHED THEN
     INSERT (
         LEAD_ID, STATUS_LABEL, LEAD_ROUTE, AVATAR, FUNNEL, SETTER_ID,
         LEAD_OWNER_ID, LEAD_QUALITY, LEAD_INTENT, VISA_STATUS,
         CURRENT_SALARY, DATE_CREATED, DATE_UPDATED, INSERT_DATE,
-        UPDATE_DATE, MD5_HASH
+        UPDATE_DATE, MD5_HASH, PIPELINE_RUN_ID
     )
     VALUES (
         source.LEAD_ID, source.STATUS_LABEL, source.LEAD_ROUTE, source.AVATAR,
         source.FUNNEL, source.SETTER_ID, source.LEAD_OWNER_ID, source.LEAD_QUALITY,
         source.LEAD_INTENT, source.VISA_STATUS, source.CURRENT_SALARY,
         source.DATE_CREATED, source.DATE_UPDATED, source.INSERT_DATE,
-        CURRENT_TIMESTAMP(), source.MD5_HASH
+        CURRENT_TIMESTAMP(), source.MD5_HASH, '__RUN_ID__'
     );
 """
 
@@ -665,7 +673,8 @@ WHEN MATCHED AND target.MD5_HASH <> source.MD5_HASH THEN
         target.DATE_SENT          = source.DATE_SENT,
         target.HAS_REPLY          = source.HAS_REPLY,
         target.MD5_HASH           = source.MD5_HASH,
-        target.UPDATE_DATE        = CURRENT_TIMESTAMP()
+        target.UPDATE_DATE        = CURRENT_TIMESTAMP(),
+        target.PIPELINE_RUN_ID = '__RUN_ID__'
 
 WHEN NOT MATCHED THEN
     INSERT (
@@ -673,7 +682,7 @@ WHEN NOT MATCHED THEN
         DATE_CREATED, DATE_UPDATED, DIRECTION, ENVELOPE_JSON,
         SENDER_JSON, OPENS_JSON, SENDER, STATUS,
         SUBJECT, JSON_PAYLOAD, USER_ID, USER_NAME, TEMPLATE_ID,
-        TEMPLATE_NAME, DATE_SENT, HAS_REPLY, INSERT_DATE, UPDATE_DATE, MD5_HASH
+        TEMPLATE_NAME, DATE_SENT, HAS_REPLY, INSERT_DATE, UPDATE_DATE, MD5_HASH, PIPELINE_RUN_ID
     )
     VALUES (
         source.LEAD_ID, source.ACTIVITY_ID, source.ACTIVITY_AT,
@@ -683,7 +692,7 @@ WHEN NOT MATCHED THEN
         source.STATUS, source.SUBJECT, source.JSON_PAYLOAD,
         source.USER_ID, source.USER_NAME, source.TEMPLATE_ID,
         source.TEMPLATE_NAME, source.DATE_SENT, source.HAS_REPLY,
-        source.INSERT_DATE, CURRENT_TIMESTAMP(), source.MD5_HASH
+        source.INSERT_DATE, CURRENT_TIMESTAMP(), source.MD5_HASH, '__RUN_ID__'
     );
 """
 
@@ -805,7 +814,8 @@ WHEN MATCHED AND target.MD5_HASH <> source.MD5_HASH THEN
         target.DEA_INTERNAL_NAME           = source.DEA_INTERNAL_NAME,
         target.DEA_INTERNAL_EMAIL          = source.DEA_INTERNAL_EMAIL,
         target.MD5_HASH                    = source.MD5_HASH,
-        target.UPDATE_DATE                 = CURRENT_TIMESTAMP()
+        target.UPDATE_DATE                 = CURRENT_TIMESTAMP(),
+        target.PIPELINE_RUN_ID = '__RUN_ID__'
 
 WHEN NOT MATCHED THEN
     INSERT (
@@ -817,7 +827,7 @@ WHEN NOT MATCHED THEN
         WRAPPED_ACTIVITIES, CUSTOM_ACTIVITY,
         CUSTOM_ACTIVITY_OUTCOME_NAME, CUSTOM_ACTIVITY_OUTCOME,
         DEA_INTERNAL_NAME, DEA_INTERNAL_EMAIL,
-        MD5_HASH, UPDATE_DATE
+        MD5_HASH, UPDATE_DATE, PIPELINE_RUN_ID
     )
     VALUES (
         source.ACTIVITY_ID, source.LEAD_ID, source.CONTACT_ID,
@@ -830,7 +840,7 @@ WHEN NOT MATCHED THEN
         source.WRAPPED_ACTIVITIES, source.CUSTOM_ACTIVITY,
         source.CUSTOM_ACTIVITY_OUTCOME_NAME, source.CUSTOM_ACTIVITY_OUTCOME,
         source.DEA_INTERNAL_NAME, source.DEA_INTERNAL_EMAIL,
-        source.MD5_HASH, CURRENT_TIMESTAMP()
+        source.MD5_HASH, CURRENT_TIMESTAMP(), '__RUN_ID__'
     );
 """
 
@@ -849,7 +859,8 @@ WHEN NOT MATCHED THEN
 SQL_LAS_REFRESH_USER_IDENTITY = USE_CONTEXT + """
 UPDATE sales_analytics.silver.leads_activities_summary las
 SET DEA_INTERNAL_NAME  = COALESCE(u.FIRST_NAME || ' ' || u.LAST_NAME, u.EMAIL),
-    DEA_INTERNAL_EMAIL = u.EMAIL
+    DEA_INTERNAL_EMAIL = u.EMAIL,
+    PIPELINE_RUN_ID    = '__RUN_ID__'
 FROM sales_analytics.silver.close_crm_users_processed u
 WHERE las.USER_ID = u.USER_ID
   AND (las.DEA_INTERNAL_NAME  IS DISTINCT FROM COALESCE(u.FIRST_NAME || ' ' || u.LAST_NAME, u.EMAIL)
@@ -908,7 +919,7 @@ SELECT
 
 
 def validate_silver_data_quality(**context):
-    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID)
+    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID, role=TRANSFORMER_ROLE)
     row = hook.get_first(SQL_SILVER_DQ_CHECKS)
     (
         lap_null_keys,
@@ -1043,20 +1054,28 @@ def _gx_connection_details(hook):
     conn = hook.get_connection(SNOWFLAKE_CONN_ID)
     extra = conn.extra_dejson
     account = extra.get("account") or (conn.host or "").replace(".snowflakecomputing.com", "")
-    if not conn.password:
-        raise AirflowFailException(
-            "snowflake_default has no password; Great Expectations validation "
-            "needs password auth (key-pair auth is not wired up yet)."
-        )
-    return {
+    details = {
         "account":   account,
         "user":      conn.login,
-        "password":  conn.password,
         "database":  DATABASE.upper(),
         "schema":    SILVER.upper(),
         "warehouse": (extra.get("warehouse") or WAREHOUSE).upper(),
-        "role":      (extra.get("role") or DQ_GX_ROLE_DEFAULT).upper(),
+        "role":      TRANSFORMER_ROLE,
     }
+    if uses_key_pair(extra):
+        # Service-user key pair. The connection Password field, if set, is the
+        # passphrase of an encrypted key, not a login password.
+        details["private_key"] = private_key_der_b64(
+            load_private_key_pem(extra), conn.password or None)
+    elif conn.password:
+        details["password"] = conn.password
+    else:
+        raise AirflowFailException(
+            "snowflake_default has neither a password nor a private key "
+            "(Extra: private_key_content or private_key_file); Great Expectations "
+            "cannot connect."
+        )
+    return details
 
 
 def run_gx_lap_checks(hook):
@@ -1146,7 +1165,7 @@ replay the quarantined rows by triggering bronze_to_silver with
 
 def validate_lap_staging(**context):
     run_id = context.get("run_id", "manual")
-    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID)
+    hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID, role=TRANSFORMER_ROLE)
 
     hook.run(SQL_LAP_STAGING_SNAPSHOT)
     total, rejected = hook.get_first(SQL_LAP_STAGING_COUNTS)
@@ -1210,7 +1229,32 @@ VALUES
 # is simply re-read next time. Trigger with full_refresh=true to rebuild from
 # all of Bronze, or since_date=YYYY-MM-DD to reprocess from a date.
 def _hook():
-    return SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID)
+    return SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID, role=TRANSFORMER_ROLE)
+
+
+RUN_ID_TOKEN = "__RUN_ID__"
+# Silver tables that carry PIPELINE_RUN_ID (added idempotently by init_run).
+SILVER_AUDIT_TABLES = (
+    "close_crm_users_processed", "custom_activities", "custom_activities_all_leads_details",
+    "leads_processed", "lead_activities_email", "lead_activities_processed",
+    "leads_activities_summary",
+)
+# Same value for the operator-run SQL, resolved by Jinja at render time.
+RUN_ID_JINJA = ("{{ ((dag_run.conf or {}).get('pipeline_run_id') or run_id) "
+                "| replace(\"'\", '') }}")
+
+
+def pipeline_run_id(context):
+    """
+    One ID for the whole pipeline run (Postgres extract -> Bronze -> Silver -> Gold).
+    The upstream DAG passes it in the trigger conf; a manual or standalone run falls
+    back to this DAG run's own run_id. Quotes are stripped because it is written
+    into SQL string literals.
+    """
+    dag_run = context.get("dag_run")
+    conf = (getattr(dag_run, "conf", None) or {}) if dag_run else {}
+    rid = conf.get("pipeline_run_id") or context.get("run_id") or "manual"
+    return str(rid).replace("'", "")
 
 
 def init_run(**context):
@@ -1218,6 +1262,8 @@ def init_run(**context):
     hook = _hook()
     hook.run(DDL_WATERMARK)
     hook.run(USE_CONTEXT + ";\n".join(qr.DDL) + ";")   # RESOLVED_* columns on dq_rejected_rows
+    hook.run([f"ALTER TABLE sales_analytics.silver.{t} ADD COLUMN IF NOT EXISTS PIPELINE_RUN_ID VARCHAR"
+              for t in SILVER_AUDIT_TABLES])
     for src in SOURCES:
         hook.run(
             f"MERGE INTO {WATERMARK_TABLE} t USING (SELECT %s AS S) s "
@@ -1252,6 +1298,7 @@ def run_windowed_sql(sql_name, source, **context):
     if mode is None:
         raise AirflowFailException(f"No window planned for {source}; init_run did not run.")
     sql = apply_tokens(globals()[sql_name], {"mode": mode, "start": start, "end": end}, mode)
+    sql = sql.replace(RUN_ID_TOKEN, pipeline_run_id(context))
     logging.info("%s on Bronze %s: mode=%s window=%s..%s", sql_name, source, mode, start, end)
     hook.run(sql)
 
@@ -1266,12 +1313,13 @@ def commit_watermark(**context):
     logging.info("Watermark committed; next run reads from the latest committed load date.")
 
 
-def run_scd2_in_transaction(statements):
+def run_scd2_in_transaction(statements, run_id="manual"):
     """
     Run SCD2 statements (close-out, then insert) as ONE transaction. Before, they were two
     tasks: a failure between them left rows closed out with no replacement current row
     until a retry. Now both are applied or neither is, so a retry is always safe.
     """
+    statements = [st.replace(RUN_ID_TOKEN, run_id) for st in statements]
     hook = _hook()
     # Every hook.run() call opens its own session, so the USE statements must travel in the
     # same call, before BEGIN (they are not part of the transaction).
@@ -1280,7 +1328,8 @@ def run_scd2_in_transaction(statements):
 
 
 def merge_lap_scd2(**context):
-    run_scd2_in_transaction([SQL_LAP_CLOSE_OUT, SQL_LAP_INSERT_NEW])
+    run_scd2_in_transaction([SQL_LAP_CLOSE_OUT, SQL_LAP_INSERT_NEW],
+                            pipeline_run_id(context))
 
 
 def replay_and_resolve_quarantine(**context):
@@ -1307,7 +1356,8 @@ def replay_and_resolve_quarantine(**context):
         eligible = hook.get_first(USE_CONTEXT + qr.replay_count_sql())[0]
         if eligible:
             run_scd2_in_transaction([qr.to_replay_source(SQL_LAP_CLOSE_OUT),
-                                     qr.to_replay_source(SQL_LAP_INSERT_NEW)])
+                                     qr.to_replay_source(SQL_LAP_INSERT_NEW)],
+                                    pipeline_run_id(context))
             hook.run(USE_CONTEXT + qr.replay_resolve_sql(run_id, LAP_GOOD_ROW_FILTER))
         open_after = hook.get_first(USE_CONTEXT + qr.open_count_sql())[0]
         logging.info("Quarantine replay: %s open before, %s eligible, %s open after "
@@ -1371,7 +1421,8 @@ with DAG(
     transform_custom_activities = SQLExecuteQueryOperator(
         task_id="transform_custom_activities",
         conn_id=SNOWFLAKE_CONN_ID,
-        sql=SQL_CUSTOM_ACTIVITIES,
+        hook_params={"role": TRANSFORMER_ROLE},
+        sql=SQL_CUSTOM_ACTIVITIES.replace(RUN_ID_TOKEN, RUN_ID_JINJA),
     )
 
     transform_custom_all_leads = PythonOperator(
@@ -1418,20 +1469,23 @@ with DAG(
     merge_las = SQLExecuteQueryOperator(
         task_id="merge_leads_activities_summary",
         conn_id=SNOWFLAKE_CONN_ID,
-        sql=SQL_LAS_MERGE,
+        hook_params={"role": TRANSFORMER_ROLE},
+        sql=SQL_LAS_MERGE.replace(RUN_ID_TOKEN, RUN_ID_JINJA),
     )
 
     # ── LAS identity re-sync (names/emails follow the users dimension) ─────
     refresh_las_identity = SQLExecuteQueryOperator(
         task_id="refresh_las_user_identity",
         conn_id=SNOWFLAKE_CONN_ID,
-        sql=SQL_LAS_REFRESH_USER_IDENTITY,
+        hook_params={"role": TRANSFORMER_ROLE},
+        sql=SQL_LAS_REFRESH_USER_IDENTITY.replace(RUN_ID_TOKEN, RUN_ID_JINJA),
     )
 
     # ── Trigger Gold layer DAG ─────────────────────────────────────────────
     trigger_gold = TriggerDagRunOperator(
         task_id="trigger_silver_to_gold",
         trigger_dag_id="silver_to_gold",
+        conf={"pipeline_run_id": RUN_ID_JINJA},
         wait_for_completion=False,
     )
 
